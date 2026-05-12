@@ -53,4 +53,3 @@ npm run dev
 npm run build
 # Deploy dist/ to Vercel, Netlify, etc.
 ```
-# signal-engine
