@@ -469,13 +469,13 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
         <div>
           <div style={{ display:'flex',alignItems:'center',gap:8 }}>
             <div style={{ width:10,height:10,borderRadius:'50%',background:tabColor,boxShadow:`0 0 8px ${tabColor}` }}/>
-            <h2 style={{ fontSize:20,fontWeight:800,letterSpacing:'-.02em',color:tabColor }}>{timeframe} Scanner</h2>
+            <h2 style={{ fontSize:20,fontWeight:800,letterSpacing:'-.02em',color:tabColor }}>{timeframe.toUpperCase()}</h2>
           </div>
           <p style={{ fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:2 }}>
             {loadingSyms?'⟳ Loading…':`${symbols.length} symbols · ${activeScanners.length} patterns`}
           </p>
         </div>
-        <div style={{ display:'flex',gap:6,alignItems:'center',flexShrink:0 }}>
+        <div style={{ display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end' }}>
           <Countdown nextAt={nextScanAt}/>
           {scanMode!=='single'&&(
             <button className="btn-primary" style={{ fontSize:12,padding:'7px 14px',
@@ -484,8 +484,32 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
               {scanning?`⟳ ${progress}%`:'▶ Scan'}
             </button>
           )}
+          {scanMode!=='single'&&(
+            <button onClick={()=>{if(loopMode)return;setEnabled(v=>!v)}}
+              style={{ display:'flex',alignItems:'center',gap:4,padding:'6px 11px',borderRadius:20,cursor:'pointer',
+                border:`1.5px solid ${enabled&&!loopMode?'var(--green2)':'var(--border)'}`,
+                background:enabled&&!loopMode?'var(--green-dim)':'var(--bg2)',
+                color:enabled&&!loopMode?'var(--green)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
+              ⏱ Auto
+            </button>
+          )}
+          {scanMode!=='single'&&(
+            <button onClick={()=>toggleLoop(!loopMode)}
+              style={{ display:'flex',alignItems:'center',gap:4,padding:'6px 11px',borderRadius:20,cursor:'pointer',
+                border:`1.5px solid ${loopMode?'var(--amber)':'var(--border)'}`,
+                background:loopMode?'rgba(255,180,0,.1)':'var(--bg2)',
+                color:loopMode?'var(--amber)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
+              🔁{loopMode?` #${loopCount}`:''}
+            </button>
+          )}
           {(scanning||loopMode||enabled)&&(
             <button className="btn-danger" style={{ fontSize:12,padding:'7px 12px' }} onClick={stopScan}>■</button>
+          )}
+          {alerts.length>0&&(
+            <button onClick={()=>setAlerts([])} style={{ fontSize:10,fontFamily:'var(--mono)',
+              color:'var(--text3)',padding:'5px 9px',border:'1px solid var(--border)',borderRadius:14,cursor:'pointer',background:'var(--bg2)' }}>
+              ✕ {alerts.length}
+            </button>
           )}
         </div>
       </div>
@@ -522,31 +546,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
         </div>
       )}
 
-      {/* ── Auto / Loop row ── */}
-      {scanMode!=='single'&&(
-        <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:10,flexWrap:'wrap' }}>
-          <button onClick={()=>{if(loopMode)return;setEnabled(v=>!v)}}
-            style={{ display:'flex',alignItems:'center',gap:5,padding:'5px 11px',borderRadius:20,cursor:'pointer',
-              border:`1.5px solid ${enabled&&!loopMode?'var(--green2)':'var(--border)'}`,
-              background:enabled&&!loopMode?'var(--green-dim)':'var(--bg2)',
-              color:enabled&&!loopMode?'var(--green)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
-            ⏱ Auto
-          </button>
-          <button onClick={()=>toggleLoop(!loopMode)}
-            style={{ display:'flex',alignItems:'center',gap:5,padding:'5px 11px',borderRadius:20,cursor:'pointer',
-              border:`1.5px solid ${loopMode?'var(--amber)':'var(--border)'}`,
-              background:loopMode?'rgba(255,180,0,.1)':'var(--bg2)',
-              color:loopMode?'var(--amber)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
-            🔁 Loop{loopMode?` #${loopCount}`:''}
-          </button>
-          {alerts.length>0&&(
-            <button onClick={()=>setAlerts([])} style={{ marginLeft:'auto',fontSize:10,fontFamily:'var(--mono)',
-              color:'var(--text3)',padding:'4px 9px',border:'1px solid var(--border)',borderRadius:14,cursor:'pointer',background:'var(--bg2)' }}>
-              Clear {alerts.length}
-            </button>
-          )}
-        </div>
-      )}
+
 
       {/* Progress bar */}
       {scanning&&(
@@ -595,20 +595,22 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
               ))}
             </div>
           </div>
-          {/* Filter + sort row */}
-          <div style={{ display:'flex',alignItems:'center',gap:4,overflowX:'auto',paddingBottom:2,WebkitOverflowScrolling:'touch',scrollbarWidth:'none' }}>
-            {[['all','All','var(--accent)','var(--accent-dim)'],['bull','🟢','var(--green)','var(--green-dim)'],['bear','🔴','var(--red)','var(--red-dim)']].map(([id,lbl,col,bg])=>(
-              <button key={id} onClick={()=>setResultFilter(id)} className="btn-small" style={{ flexShrink:0,...(resultFilter===id?{borderColor:col,color:col,background:bg,fontWeight:700}:{}) }}>{lbl}</button>
+          {/* Filter + sort row — single horizontal scrollable line */}
+          <div style={{ display:'flex',alignItems:'center',gap:4,overflowX:'auto',flexWrap:'nowrap',
+            paddingBottom:4,WebkitOverflowScrolling:'touch',scrollbarWidth:'none',msOverflowStyle:'none' }}>
+            {/* Signal / Bull / Bear filter */}
+            {[['all','Signal','var(--accent)','var(--accent-dim)'],['bull','🟢 Bull','var(--green)','var(--green-dim)'],['bear','🔴 Bear','var(--red)','var(--red-dim)']].map(([id,lbl,col,bg])=>(
+              <button key={id} onClick={()=>setResultFilter(id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(resultFilter===id?{borderColor:col,color:col,background:bg,fontWeight:700}:{}) }}>{lbl}</button>
             ))}
             <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
             {/* Volume filter */}
             {VOLUME_FILTERS.map(f=>(
-              <button key={f.id} onClick={()=>setVolumeFilter(f.id)} className="btn-small" style={{ flexShrink:0,...(volumeFilter===f.id?{borderColor:'var(--purple)',color:'var(--purple)',background:'var(--purple-dim)',fontWeight:700}:{}) }}>{f.label}</button>
+              <button key={f.id} onClick={()=>setVolumeFilter(f.id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(volumeFilter===f.id?{borderColor:'var(--purple)',color:'var(--purple)',background:'var(--purple-dim)',fontWeight:700}:{}) }}>{f.label}</button>
             ))}
             <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
             <span style={{ fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',flexShrink:0 }}>↕</span>
             {[['time','Time'],['symbol','Sym'],['gain','Gain'],['volume','Vol']].map(([col,label])=>(
-              <button key={col} className={`sort-btn ${sortBy===col?'active':''}`} onClick={()=>toggleSort(col)} style={{ flexShrink:0 }}>
+              <button key={col} className={`sort-btn ${sortBy===col?'active':''}`} onClick={()=>toggleSort(col)} style={{ flexShrink:0,whiteSpace:'nowrap' }}>
                 {label}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}
               </button>
             ))}
