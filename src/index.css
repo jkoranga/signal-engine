@@ -310,13 +310,13 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 
 /* ── Topbar v2 ── */
 .topbar-v2 {
-  height: 54px;
+  height: 46px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  gap: 10px;
+  padding: 0 12px;
+  gap: 8px;
   background: var(--bg1);
   z-index: 10;
 }
@@ -325,18 +325,18 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 .content-scroll-v2 {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 14px 8px;
+  padding: 10px 12px 6px;
   -webkit-overflow-scrolling: touch;
 }
 @media(min-width:700px) {
-  .content-scroll-v2 { padding: 20px 24px 12px; max-width: 720px; margin: 0 auto; width: 100%; }
+  .content-scroll-v2 { padding: 16px 22px 10px; max-width: 720px; margin: 0 auto; width: 100%; }
 }
 
 /* ── Bottom nav v2 ── */
 .bottom-nav-v2 {
   display: flex;
   flex-shrink: 0;
-  height: 56px;
+  height: 50px;
   background: var(--bg1);
   border-top: 1px solid var(--border);
   z-index: 20;
@@ -349,7 +349,7 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 /* ── Bottom tab button ── */
 .bottom-tab {
   flex: 1;
-  min-width: 44px;
+  min-width: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -359,7 +359,7 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
   border: none;
   cursor: pointer;
   transition: all .15s;
-  padding: 0 4px;
+  padding: 0 2px;
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 700;
@@ -367,6 +367,8 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
   border-top: 2px solid transparent;
 }
 .bottom-tab:active { opacity: .7; }
+/* Settings tab — slightly wider to fit the gear icon */
+.bottom-tab-settings { min-width: 48px; flex: 0 0 48px; }
 
 .bottom-tab-label {
   font-size: 11px;

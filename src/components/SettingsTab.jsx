@@ -159,10 +159,24 @@ function ScanSettingsSection({ settings, update }) {
   )
 }
 
-// ── Pattern Manager ───────────────────────────────────────
+// ── Pattern Manager with TF tabs ─────────────────────────────────────────────
+const TF_PATTERN_TABS = [
+  { id: 'global', label: 'All TF', color: '#00b8d9', desc: 'Default for all scanners' },
+  { id: '1m',  label: '1m',  color: '#ff6b6b', desc: 'Scalping conditions' },
+  { id: '3m',  label: '3m',  color: '#ffa94d', desc: 'Fast momentum' },
+  { id: '5m',  label: '5m',  color: '#ffd43b', desc: 'Short-term setups' },
+  { id: '15m', label: '15m', color: '#69db7c', desc: 'Intraday trend' },
+  { id: '1h',  label: '1h',  color: '#4dabf7', desc: 'Swing conditions' },
+  { id: '4h',  label: '4h',  color: '#9775fa', desc: 'Position setups' },
+  { id: '1d',  label: 'Day', color: '#f783ac', desc: 'Macro trend setups' },
+]
+
 function PatternManager({ settings, update }) {
   const [expanded, setExpanded] = useState({})
   const [sideFilter, setSideFilter] = useState('all')
+  const [activeTF, setActiveTF] = useState('global')
+
+  const activeTFCfg = TF_PATTERN_TABS.find(t => t.id === activeTF)
 
   const scannerEnabled = (() => {
     const saved = settings.scannerEnabled || {}
@@ -171,32 +185,107 @@ function PatternManager({ settings, update }) {
     return merged
   })()
 
-  function setScannerEnabled(fn) {
-    const next = typeof fn==='function' ? fn(scannerEnabled) : fn
-    update({ scannerEnabled: next })
+  const tfPatterns = settings.tfPatterns || {}
+
+  function getEnabledForTF(tf) {
+    if (tf === 'global') return scannerEnabled
+    const overrides = tfPatterns[tf] || {}
+    const merged = {}
+    ALL_SCANNERS.forEach(s => {
+      merged[s.id] = s.id in overrides ? overrides[s.id] : (scannerEnabled[s.id] !== false)
+    })
+    return merged
   }
 
-  const enabledCount = ALL_SCANNERS.filter(s=>scannerEnabled[s.id]).length
-  const visible = ALL_SCANNERS.filter(s=>sideFilter==='all'||s.side===sideFilter)
+  function setTFEnabled(tf, fn) {
+    if (tf === 'global') {
+      const next = typeof fn === 'function' ? fn(scannerEnabled) : fn
+      update({ scannerEnabled: next })
+    } else {
+      const current = getEnabledForTF(tf)
+      const next = typeof fn === 'function' ? fn(current) : fn
+      update({ tfPatterns: { ...tfPatterns, [tf]: next } })
+    }
+  }
+
+  const enabledMap = getEnabledForTF(activeTF)
+  const enabledCount = ALL_SCANNERS.filter(s => enabledMap[s.id]).length
+  const visible = ALL_SCANNERS.filter(s => sideFilter === 'all' || s.side === sideFilter)
 
   return (
     <div>
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:12,flexWrap:'wrap' }}>
-        <div style={{ display:'flex',gap:5,flexWrap:'wrap' }}>
-          <button className="btn-small" onClick={()=>setScannerEnabled(()=>{const n={};ALL_SCANNERS.forEach(s=>n[s.id]=true);return n})}
-            style={{background:'rgba(0,230,118,0.12)',borderColor:'rgba(0,192,96,0.5)',color:'var(--green)',fontWeight:700}}>✓ All On</button>
-          <button className="btn-small" onClick={()=>setScannerEnabled(()=>{const n={};ALL_SCANNERS.forEach(s=>n[s.id]=false);return n})}
-            style={{background:'rgba(255,70,70,0.08)',borderColor:'rgba(255,70,70,0.35)',color:'var(--red)',fontWeight:700}}>✗ All Off</button>
+      {/* TF selector tabs */}
+      <div style={{ overflowX:'auto', marginBottom:12, paddingBottom:2 }}>
+        <div style={{ display:'flex', gap:4, minWidth:'max-content' }}>
+          {TF_PATTERN_TABS.map(tf => {
+            const isActive = activeTF === tf.id
+            const hasOverride = tf.id !== 'global' && !!tfPatterns[tf.id]
+            return (
+              <button key={tf.id} onClick={() => setActiveTF(tf.id)}
+                style={{
+                  padding:'5px 11px', borderRadius:8, fontSize:11, fontWeight:700,
+                  fontFamily:'var(--mono)', cursor:'pointer', position:'relative',
+                  border:`1.5px solid ${isActive ? tf.color : 'var(--border)'}`,
+                  background:isActive ? `${tf.color}18` : 'var(--bg2)',
+                  color:isActive ? tf.color : 'var(--text3)',
+                  transition:'all .15s', flexShrink:0,
+                }}>
+                {tf.label}
+                {hasOverride && (
+                  <span style={{
+                    position:'absolute', top:-4, right:-4, width:7, height:7,
+                    borderRadius:'50%', background:tf.color,
+                  }}/>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Active TF description */}
+      <div style={{
+        background:`${activeTFCfg.color}0f`, border:`1px solid ${activeTFCfg.color}30`,
+        borderRadius:8, padding:'8px 11px', marginBottom:11,
+        display:'flex', alignItems:'center', gap:8,
+      }}>
+        <div style={{ width:7, height:7, borderRadius:'50%', background:activeTFCfg.color, flexShrink:0,
+          boxShadow:`0 0 6px ${activeTFCfg.color}` }}/>
+        <div style={{ flex:1, minWidth:0 }}>
+          <span style={{ fontSize:11, fontWeight:700, color:activeTFCfg.color, fontFamily:'var(--mono)' }}>
+            {activeTFCfg.label.toUpperCase()}
+          </span>
+          <span style={{ fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6 }}>
+            {activeTFCfg.desc}
+            {activeTF !== 'global' && ' · overrides global for this TF'}
+          </span>
+        </div>
+        {activeTF !== 'global' && tfPatterns[activeTF] && (
           <button className="btn-small"
-            onClick={()=>setScannerEnabled(p=>{const n={...p};ALL_SCANNERS.forEach(s=>{if(s.side==='bull')n[s.id]=true});return n})}
+            onClick={() => { const t={...tfPatterns}; delete t[activeTF]; update({ tfPatterns:t }) }}
+            style={{ borderColor:'var(--amber)', color:'var(--amber)', background:'rgba(255,167,38,.08)', fontSize:10, padding:'3px 8px' }}>
+            ↺ Reset
+          </button>
+        )}
+      </div>
+
+      {/* Bulk actions */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+          <button className="btn-small" onClick={() => setTFEnabled(activeTF, () => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=true); return n })}
+            style={{background:'rgba(0,230,118,0.12)',borderColor:'rgba(0,192,96,0.5)',color:'var(--green)',fontWeight:700}}>✓ All</button>
+          <button className="btn-small" onClick={() => setTFEnabled(activeTF, () => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=false); return n })}
+            style={{background:'rgba(255,70,70,0.08)',borderColor:'rgba(255,70,70,0.35)',color:'var(--red)',fontWeight:700}}>✗ All</button>
+          <button className="btn-small"
+            onClick={() => setTFEnabled(activeTF, p => { const n={...p}; ALL_SCANNERS.forEach(s=>{ if(s.side==='bull') n[s.id]=true }); return n })}
             style={{background:'rgba(0,230,118,0.07)',borderColor:'rgba(0,192,96,0.35)',color:'var(--green)'}}>🟢 Bull</button>
           <button className="btn-small"
-            onClick={()=>setScannerEnabled(p=>{const n={...p};ALL_SCANNERS.forEach(s=>{if(s.side==='bear')n[s.id]=true});return n})}
+            onClick={() => setTFEnabled(activeTF, p => { const n={...p}; ALL_SCANNERS.forEach(s=>{ if(s.side==='bear') n[s.id]=true }); return n })}
             style={{background:'rgba(255,70,70,0.07)',borderColor:'rgba(255,70,70,0.3)',color:'var(--red)'}}>🔴 Bear</button>
         </div>
-        <div style={{ display:'flex',gap:4 }}>
+        <div style={{ display:'flex', gap:4 }}>
           {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,lbl])=>(
-            <button key={id} className="btn-small" onClick={()=>setSideFilter(id)}
+            <button key={id} className="btn-small" onClick={() => setSideFilter(id)}
               style={sideFilter===id?{borderColor:id==='bull'?'var(--green2)':id==='bear'?'var(--red2)':'var(--border2)',
                 color:id==='bull'?'var(--green)':id==='bear'?'var(--red)':'var(--text)',
                 background:id==='bull'?'var(--green-dim)':id==='bear'?'var(--red-dim)':'var(--bg3)',fontWeight:700}:{}}>{lbl}</button>
@@ -204,15 +293,16 @@ function PatternManager({ settings, update }) {
         </div>
       </div>
 
-      <div style={{ fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',marginBottom:10 }}>
-        {enabledCount}/{ALL_SCANNERS.length} patterns active · applies to all TF tabs
+      <div style={{ fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginBottom:10 }}>
+        {enabledCount}/{ALL_SCANNERS.length} active for{' '}
+        <span style={{ color:activeTFCfg.color }}>{activeTFCfg.label}</span>
       </div>
 
-      <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
-        {visible.map(s=>(
+      <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+        {visible.map(s => (
           <ScannerDefCard key={s.id} scanner={s}
-            expanded={!!expanded[s.id]} onTap={()=>setExpanded(p=>({...p,[s.id]:!p[s.id]}))}
-            enabled={scannerEnabled[s.id]} onToggle={v=>setScannerEnabled(p=>({...p,[s.id]:v}))}/>
+            expanded={!!expanded[s.id]} onTap={() => setExpanded(p => ({...p,[s.id]:!p[s.id]}))}
+            enabled={enabledMap[s.id]} onToggle={v => setTFEnabled(activeTF, p => ({...p,[s.id]:v}))}/>
         ))}
       </div>
     </div>
@@ -224,10 +314,10 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom:16 }}>
-        <h2 style={{ fontSize:20,fontWeight:800,letterSpacing:'-.02em',marginBottom:3 }}>Settings</h2>
-        <p style={{ fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)' }}>
-          All configuration · applies globally to all TF tabs
+      <div style={{ marginBottom:12 }}>
+        <h2 style={{ fontSize:18,fontWeight:800,letterSpacing:'-.02em',marginBottom:2 }}>Settings</h2>
+        <p style={{ fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)' }}>
+          Configuration · per-TF pattern overrides supported
         </p>
       </div>
 
@@ -243,10 +333,12 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
       </Accordion>
 
       {/* Pattern manager */}
-      <Accordion title={`Patterns (${ALL_SCANNERS.length} total)`} icon="🔬" defaultOpen={false} accentColor="rgba(150,100,255,0.6)">
-        <div style={{background:'rgba(150,100,255,0.07)',border:'1px solid rgba(150,100,255,0.22)',borderRadius:8,padding:'9px 12px',marginBottom:12}}>
-          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'#b388ff',fontWeight:700,marginBottom:3}}>⚡ EMA + RSI Patterns</div>
-          <div style={{fontSize:11,color:'var(--text3)',lineHeight:1.6}}>Toggle patterns on/off. Changes apply to all TF scanners simultaneously.</div>
+      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)">
+        <div style={{background:'rgba(150,100,255,0.07)',border:'1px solid rgba(150,100,255,0.22)',borderRadius:8,padding:'8px 11px',marginBottom:10}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'#b388ff',fontWeight:700,marginBottom:2}}>⚡ EMA + RSI Patterns — per-timeframe</div>
+          <div style={{fontSize:10,color:'var(--text3)',lineHeight:1.5}}>
+            Set global defaults in <b style={{color:'#00b8d9'}}>All TF</b>, then override per timeframe. Each TF scanner can run a different pattern set.
+          </div>
         </div>
         <PatternManager settings={settings} update={update}/>
       </Accordion>
