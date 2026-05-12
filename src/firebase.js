@@ -1,6 +1,5 @@
 // firebase.js — EMA Sigma v2.0
 // Firebase project: signal-engines
-// Settings auto-save/load for authenticated users via Firestore
 
 let _app = null
 let _auth = null
@@ -8,14 +7,24 @@ let _db = null
 
 export let isConfigured = false
 
+// ── Hardcoded config (signal-engines) ────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAZahY8Ci0yGHHZcf5TLTakNod16Hihbqo",
+  authDomain:        "signal-engines.firebaseapp.com",
+  projectId:         "signal-engines",
+  storageBucket:     "signal-engines.firebasestorage.app",
+  messagingSenderId: "998907341980",
+  appId:             "1:998907341980:web:84aea5bfe2f6238e049159"
+}
+
 async function init() {
   if (_app) return { auth: _auth, db: _db }
-  const apiKey    = import.meta.env.VITE_FB_API_KEY    || import.meta.env.VITE_FIREBASE_API_KEY
-  const authDomain= import.meta.env.VITE_FB_AUTH_DOMAIN
-  const projectId = import.meta.env.VITE_FB_PROJECT_ID
-  const appId     = import.meta.env.VITE_FB_APP_ID
 
-  if (!apiKey || !projectId) throw new Error('Firebase not configured — add VITE_FB_* to .env')
+  // env vars take priority, fallback to hardcoded
+  const apiKey     = import.meta.env.VITE_FB_API_KEY     || FIREBASE_CONFIG.apiKey
+  const authDomain = import.meta.env.VITE_FB_AUTH_DOMAIN || FIREBASE_CONFIG.authDomain
+  const projectId  = import.meta.env.VITE_FB_PROJECT_ID  || FIREBASE_CONFIG.projectId
+  const appId      = import.meta.env.VITE_FB_APP_ID      || FIREBASE_CONFIG.appId
 
   const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js')
   const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, signOut, onAuthStateChanged }
@@ -23,7 +32,7 @@ async function init() {
   const { getFirestore, doc, getDoc, setDoc }
     = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')
 
-  const cfg = { apiKey, authDomain: authDomain || `${projectId}.firebaseapp.com`, projectId, appId: appId || '' }
+  const cfg = { apiKey, authDomain, projectId, appId }
   _app  = getApps().length ? getApps()[0] : initializeApp(cfg)
   _auth = getAuth(_app)
   _db   = getFirestore(_app)
@@ -51,7 +60,7 @@ export async function logout() {
   await signOut(_auth)
 }
 
-// Save settings to Firestore: users/{uid}/settings/acf
+// Save settings to Firestore: users/{uid}/settings/ema-sigma
 export async function saveSettingsToCloud(uid, settings) {
   if (!uid) return
   try {
@@ -60,7 +69,7 @@ export async function saveSettingsToCloud(uid, settings) {
     await setDoc(ref, { ...settings, _savedAt: Date.now() }, { merge: true })
     return true
   } catch (e) {
-    console.warn('[ACF] saveSettings failed:', e.message)
+    console.warn('[EMA Sigma] saveSettings failed:', e.message)
     return false
   }
 }
@@ -75,7 +84,7 @@ export async function loadSettingsFromCloud(uid) {
     if (snap.exists()) return snap.data()
     return null
   } catch (e) {
-    console.warn('[ACF] loadSettings failed:', e.message)
+    console.warn('[EMA Sigma] loadSettings failed:', e.message)
     return null
   }
 }
@@ -87,7 +96,7 @@ export async function onAuthChanged(callback) {
   return onAuthStateChanged(auth, callback)
 }
 
-// Check if Firebase env vars present (sync, no async)
+// Always configured now (hardcoded fallback)
 export function checkConfigured() {
-  return !!(import.meta.env.VITE_FB_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY)
+  return true
 }
