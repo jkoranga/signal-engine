@@ -1,4 +1,5 @@
-// firebase.js — full Firebase SDK integration for ACF v1.0
+// firebase.js — EMA Sigma v2.0
+// Firebase project: signal-engines
 // Settings auto-save/load for authenticated users via Firestore
 
 let _app = null
@@ -55,7 +56,7 @@ export async function saveSettingsToCloud(uid, settings) {
   if (!uid) return
   try {
     const { db, doc, setDoc } = await init()
-    const ref = doc(db, 'users', uid, 'settings', 'acf')
+    const ref = doc(db, 'users', uid, 'settings', 'ema-sigma')
     await setDoc(ref, { ...settings, _savedAt: Date.now() }, { merge: true })
     return true
   } catch (e) {
@@ -69,7 +70,7 @@ export async function loadSettingsFromCloud(uid) {
   if (!uid) return null
   try {
     const { db, doc, getDoc } = await init()
-    const ref = doc(db, 'users', uid, 'settings', 'acf')
+    const ref = doc(db, 'users', uid, 'settings', 'ema-sigma')
     const snap = await getDoc(ref)
     if (snap.exists()) return snap.data()
     return null
