@@ -475,39 +475,84 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
             {loadingSyms?'⟳ Loading…':`${symbols.length} symbols · ${activeScanners.length} patterns`}
           </p>
         </div>
-        <div style={{ display:'flex',gap:6,alignItems:'center',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end' }}>
+        <div style={{ display:'flex',gap:5,alignItems:'center',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end' }}>
           <Countdown nextAt={nextScanAt}/>
+
+          {/* ── SCAN button: single-click = run once, second click (while not scanning) = auto mode ── */}
           {scanMode!=='single'&&(
-            <button className="btn-primary" style={{ fontSize:12,padding:'7px 14px',
-              borderColor:tabColor,color:tabColor,background:`${tabColor}15` }}
-              onClick={()=>runScan()} disabled={scanning}>
-              {scanning?`⟳ ${progress}%`:'▶ Scan'}
+            <button
+              onClick={() => {
+                if (scanning) return
+                if (loopMode) return
+                if (enabled) {
+                  // already in auto → turn off
+                  stopScan()
+                } else {
+                  // not active → run scan AND arm auto together
+                  setEnabled(true)
+                  runScan()
+                }
+              }}
+              disabled={scanning && !enabled && !loopMode}
+              style={{
+                display:'flex', alignItems:'center', gap:5,
+                padding:'7px 14px', borderRadius:8, cursor:'pointer',
+                fontSize:12, fontFamily:'var(--mono)', fontWeight:700,
+                border:`1.5px solid ${enabled&&!loopMode ? 'var(--green2)' : scanning ? tabColor+'80' : tabColor}`,
+                background: enabled&&!loopMode ? 'var(--green-dim)' : `${tabColor}15`,
+                color: enabled&&!loopMode ? 'var(--green)' : tabColor,
+                transition:'all .15s',
+                minWidth: 74,
+                justifyContent:'center',
+              }}
+            >
+              {scanning
+                ? <><span style={{animation:'spin 0.7s linear infinite',display:'inline-block'}}>⟳</span> {progress}%</>
+                : enabled
+                  ? <>⏱ Auto</>
+                  : <>▶ Scan</>
+              }
             </button>
           )}
+
+          {/* ── LOOP button — styled same as Scan button ── */}
           {scanMode!=='single'&&(
-            <button onClick={()=>{if(loopMode)return;setEnabled(v=>!v)}}
-              style={{ display:'flex',alignItems:'center',gap:4,padding:'6px 11px',borderRadius:20,cursor:'pointer',
-                border:`1.5px solid ${enabled&&!loopMode?'var(--green2)':'var(--border)'}`,
-                background:enabled&&!loopMode?'var(--green-dim)':'var(--bg2)',
-                color:enabled&&!loopMode?'var(--green)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
-              ⏱ Auto
+            <button
+              onClick={() => toggleLoop(!loopMode)}
+              style={{
+                display:'flex', alignItems:'center', gap:5,
+                padding:'7px 14px', borderRadius:8, cursor:'pointer',
+                fontSize:12, fontFamily:'var(--mono)', fontWeight:700,
+                border:`1.5px solid ${loopMode ? 'var(--amber)' : 'var(--border)'}`,
+                background: loopMode ? 'rgba(255,180,0,.12)' : 'var(--bg2)',
+                color: loopMode ? 'var(--amber)' : 'var(--text3)',
+                transition:'all .15s',
+                minWidth: loopMode ? 68 : 56,
+                justifyContent:'center',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{flexShrink:0,animation:loopMode?'spin 1.4s linear infinite':'none'}}>
+                <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+              </svg>
+              {loopMode ? `#${loopCount}` : 'Loop'}
             </button>
           )}
-          {scanMode!=='single'&&(
-            <button onClick={()=>toggleLoop(!loopMode)}
-              style={{ display:'flex',alignItems:'center',gap:4,padding:'6px 11px',borderRadius:20,cursor:'pointer',
-                border:`1.5px solid ${loopMode?'var(--amber)':'var(--border)'}`,
-                background:loopMode?'rgba(255,180,0,.1)':'var(--bg2)',
-                color:loopMode?'var(--amber)':'var(--text3)',fontSize:11,fontFamily:'var(--mono)',fontWeight:700 }}>
-              🔁{loopMode?` #${loopCount}`:''}
-            </button>
-          )}
+
+          {/* Stop button — only show when something is running */}
           {(scanning||loopMode||enabled)&&(
-            <button className="btn-danger" style={{ fontSize:12,padding:'7px 12px' }} onClick={stopScan}>■</button>
+            <button onClick={stopScan}
+              style={{ padding:'7px 11px',borderRadius:8,fontSize:13,fontWeight:800,cursor:'pointer',
+                border:'1.5px solid var(--red2)',background:'var(--red-dim)',color:'var(--red)',
+                display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+              ■
+            </button>
           )}
+
+          {/* Clear alerts badge */}
           {alerts.length>0&&(
             <button onClick={()=>setAlerts([])} style={{ fontSize:10,fontFamily:'var(--mono)',
-              color:'var(--text3)',padding:'5px 9px',border:'1px solid var(--border)',borderRadius:14,cursor:'pointer',background:'var(--bg2)' }}>
+              color:'var(--text3)',padding:'5px 9px',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',background:'var(--bg2)' }}>
               ✕ {alerts.length}
             </button>
           )}

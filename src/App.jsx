@@ -198,36 +198,59 @@ export default function App() {
   return (
     <div className="app-shell-v2">
       <header className="topbar-v2">
-        <div style={{ display:'flex',alignItems:'center',gap:9 }}>
-          <LogoMark size={32} />
-          <div>
-            <div style={{ fontWeight:800,fontSize:16,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.1 }}>Signal Engine</div>
-            <div style={{ fontFamily:'var(--mono)',fontSize:9,color:'var(--text3)',letterSpacing:'.08em' }}>BINANCE · {VERSION}</div>
+        {/* Logo acts as Home button → goes to 15m tab */}
+        <button onClick={() => setActiveTab('15m')} title="Home · go to 15m"
+          style={{ display:'flex',alignItems:'center',gap:8,background:'none',border:'none',
+            cursor:'pointer',padding:'3px 6px 3px 0',borderRadius:8,flexShrink:0,
+            opacity:1,transition:'opacity .15s' }}
+          onMouseEnter={e=>e.currentTarget.style.opacity='.7'}
+          onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+          <LogoMark size={27} />
+          <div style={{ textAlign:'left' }}>
+            <div style={{ fontWeight:800,fontSize:14,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.15 }}>Signal Engine</div>
+            <div style={{ fontFamily:'var(--mono)',fontSize:8,color:'var(--text3)',letterSpacing:'.08em' }}>BINANCE · {VERSION}</div>
           </div>
-        </div>
-        <div style={{ display:'flex',alignItems:'center',gap:8,marginLeft:'auto' }}>
+        </button>
+
+        <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
+          {/* Active TF indicator pill */}
           {activeTab !== 'settings' && activeTabCfg && (
-            <div style={{ display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,
+            <div style={{ display:'flex',alignItems:'center',gap:4,padding:'3px 9px',borderRadius:20,
               background:`${activeTabCfg.color}14`,border:`1px solid ${activeTabCfg.color}44` }}>
-              <div style={{ width:6,height:6,borderRadius:'50%',background:activeTabCfg.color,
+              <div style={{ width:5,height:5,borderRadius:'50%',background:activeTabCfg.color,
                 boxShadow:`0 0 6px ${activeTabCfg.color}`,animation:'pulse 2s infinite' }}/>
-              <span style={{ fontFamily:'var(--mono)',fontSize:11,fontWeight:700,color:activeTabCfg.color }}>{activeTab}</span>
+              <span style={{ fontFamily:'var(--mono)',fontSize:10,fontWeight:700,color:activeTabCfg.color }}>{activeTab}</span>
             </div>
           )}
+          {/* Cloud sync badge */}
           {user && (
-            <span style={{ fontSize:10,fontFamily:'var(--mono)',fontWeight:700,padding:'3px 8px',borderRadius:10,
+            <span style={{ fontSize:10,fontFamily:'var(--mono)',fontWeight:700,padding:'3px 7px',borderRadius:10,
               color: cloudSaving?'var(--amber)':cloudSynced?'var(--green)':'var(--text3)',
               background: cloudSaving?'rgba(255,167,38,.12)':cloudSynced?'var(--green-dim)':'rgba(255,255,255,0.05)',
               border:`1px solid ${cloudSaving?'var(--amber)':cloudSynced?'var(--green2)':'var(--border)'}` }}>
               {cloudSaving?'⟳':cloudSynced?'☁✓':'☁'}
             </span>
           )}
-          {user && (
-            <UserMenu
-              user={user}
-              onLogout={handleLogout}
-              onGoToSettings={() => setActiveTab('settings')}
-            />
+          {/* User icon — ALWAYS visible. Shows login icon when logged out */}
+          {user ? (
+            <UserMenu user={user} onLogout={handleLogout} onGoToSettings={() => setActiveTab('settings')} />
+          ) : (
+            <button
+              onClick={() => setActiveTab('settings')}
+              title="Sign in"
+              style={{
+                width:32, height:32, borderRadius:'50%', flexShrink:0,
+                border:'1.5px solid var(--border2)', background:'var(--bg2)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                cursor:'pointer', transition:'border-color .15s, background .15s',
+              }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-dim)'}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--bg2)'}}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </button>
           )}
         </div>
       </header>
