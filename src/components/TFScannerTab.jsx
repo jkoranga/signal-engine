@@ -498,9 +498,10 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
                 display:'flex', alignItems:'center', gap:5,
                 padding:'7px 14px', borderRadius:8, cursor:'pointer',
                 fontSize:12, fontFamily:'var(--mono)', fontWeight:700,
-                border:`1.5px solid ${enabled&&!loopMode ? 'var(--green2)' : scanning ? tabColor+'80' : tabColor}`,
+                border:`2px solid ${enabled&&!loopMode ? 'var(--green)' : scanning ? tabColor+'cc' : tabColor}`,
                 background: enabled&&!loopMode ? 'var(--green-dim)' : `${tabColor}15`,
                 color: enabled&&!loopMode ? 'var(--green)' : tabColor,
+                boxShadow: enabled&&!loopMode ? '0 0 8px rgba(0,230,118,0.3)' : scanning ? `0 0 10px ${tabColor}55` : `0 0 6px ${tabColor}33`,
                 transition:'all .15s',
                 minWidth: 74,
                 justifyContent:'center',
@@ -515,7 +516,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
             </button>
           )}
 
-          {/* ── LOOP button — styled same as Scan button ── */}
+          {/* ── LOOP button — styled same as Scan button but with cyan color ── */}
           {scanMode!=='single'&&(
             <button
               onClick={() => toggleLoop(!loopMode)}
@@ -523,9 +524,10 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
                 display:'flex', alignItems:'center', gap:5,
                 padding:'7px 14px', borderRadius:8, cursor:'pointer',
                 fontSize:12, fontFamily:'var(--mono)', fontWeight:700,
-                border:`1.5px solid ${loopMode ? 'var(--amber)' : 'var(--border)'}`,
-                background: loopMode ? 'rgba(255,180,0,.12)' : 'var(--bg2)',
-                color: loopMode ? 'var(--amber)' : 'var(--text3)',
+                border:`2px solid ${loopMode ? '#00d4ff' : 'rgba(0,212,255,0.55)'}`,
+                background: loopMode ? 'rgba(0,212,255,.13)' : 'rgba(0,212,255,0.07)',
+                color: loopMode ? '#00d4ff' : 'rgba(0,212,255,0.8)',
+                boxShadow: loopMode ? '0 0 10px rgba(0,212,255,0.35)' : '0 0 6px rgba(0,212,255,0.15)',
                 transition:'all .15s',
                 minWidth: loopMode ? 68 : 56,
                 justifyContent:'center',

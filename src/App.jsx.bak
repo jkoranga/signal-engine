@@ -4,7 +4,7 @@ import TFScannerTab from './components/TFScannerTab.jsx'
 import SettingsTab from './components/SettingsTab.jsx'
 import { onAuthChanged, checkConfigured } from './firebase.js'
 
-const VERSION = 'v2.5'
+const VERSION = 'v2.0'
 
 export const TF_TABS = [
   { id: '1m',  label: '1m',  color: '#ff6b6b', glow: 'rgba(255,107,107,0.3)'  },
@@ -57,114 +57,6 @@ function LogoMark({ size=32 }) {
   )
 }
 
-function LoginModal({ onClose, onUserChange }) {
-  const [email, setEmail] = React.useState('')
-  const [pass,  setPass]  = React.useState('')
-  const [err,   setErr]   = React.useState('')
-  const [loading, setLoading] = React.useState(false)
-
-  React.useEffect(() => {
-    const fn = e => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', fn)
-    return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
-
-  async function handleGoogle() {
-    setErr('')
-    setLoading(true)
-    try {
-      const { loginWithGoogle, checkConfigured } = await import('./firebase.js')
-      if (!checkConfigured()) { setErr('Firebase not configured. Add VITE_FB_* to .env'); return }
-      const u = await loginWithGoogle()
-      onUserChange(u)
-      onClose()
-    } catch(e) { setErr(e.message) }
-    finally { setLoading(false) }
-  }
-
-  async function handleEmail(e) {
-    e.preventDefault(); setErr('')
-    setLoading(true)
-    try {
-      const { loginWithEmail, checkConfigured } = await import('./firebase.js')
-      if (!checkConfigured()) { setErr('Firebase not configured.'); return }
-      const u = await loginWithEmail(email, pass)
-      onUserChange(u)
-      onClose()
-    } catch(e) { setErr(e.message) }
-    finally { setLoading(false) }
-  }
-
-  return (
-    <div style={{
-      position:'fixed', inset:0, zIndex:1000,
-      display:'flex', alignItems:'center', justifyContent:'center',
-      background:'rgba(0,0,0,0.7)', backdropFilter:'blur(4px)',
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background:'var(--bg2)', border:'1px solid var(--border2)',
-        borderRadius:16, padding:'28px 24px', width:'min(340px, 92vw)',
-        boxShadow:'0 12px 48px rgba(0,0,0,0.7)',
-      }}>
-        {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:22 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:17, color:'var(--text)' }}>Sign In</div>
-            <div style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:3 }}>Sync settings across devices</div>
-          </div>
-          <button onClick={onClose} style={{ width:28,height:28,borderRadius:'50%',border:'1px solid var(--border)',
-            background:'var(--bg3)',color:'var(--text3)',cursor:'pointer',fontSize:16,display:'flex',
-            alignItems:'center',justifyContent:'center' }}>✕</button>
-        </div>
-
-        {/* Google */}
-        <button onClick={handleGoogle} disabled={loading} style={{
-          display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-          width:'100%', padding:'11px', borderRadius:8,
-          border:'1px solid var(--border2)', background:'var(--bg3)',
-          color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer',
-          marginBottom:16, transition:'all .15s',
-        }}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-dim)'}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--bg3)'}}
-        >
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#4285F4" d="M44.5 20H24v8.5h11.7C34.1 33.5 29.6 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.1 8 3l6-6C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.2-4z"/>
-            <path fill="#34A853" d="M6.3 14.7l7 5.1C15 17.2 19.2 14 24 14c3.1 0 5.9 1.1 8 3l6-6C34.1 6.1 29.3 4 24 4c-7.6 0-14.2 4.2-17.7 10.7z"/>
-            <path fill="#FBBC05" d="M24 44c5.2 0 9.8-1.7 13.4-4.7l-6.2-5.2C29.4 35.3 26.8 36 24 36c-5.6 0-10.1-3.5-11.7-8.4l-7 5.3C8 39.4 15.4 44 24 44z"/>
-            <path fill="#EA4335" d="M44.5 20H24v8.5h11.7c-.9 2.5-2.5 4.6-4.7 6.1l6.2 5.2C40.8 36.3 44.5 30.6 44.5 24c0-1.3-.1-2.7-.2-4z"/>
-          </svg>
-          {loading ? 'Signing in…' : 'Continue with Google'}
-        </button>
-
-        {/* Divider */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
-          <div style={{ flex:1, height:1, background:'var(--border)' }} />
-          <span style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)' }}>or email</span>
-          <div style={{ flex:1, height:1, background:'var(--border)' }} />
-        </div>
-
-        {/* Email form */}
-        <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-          <input className="field" type="email" placeholder="Email" value={email}
-            onChange={e => setEmail(e.target.value)} style={{ fontSize:13 }} />
-          <input className="field" type="password" placeholder="Password" value={pass}
-            onChange={e => setPass(e.target.value)} style={{ fontSize:13 }} />
-          <button onClick={handleEmail} disabled={loading} style={{
-            padding:'10px', borderRadius:8,
-            border:'1px solid var(--green2)', background:'var(--green-dim)',
-            color:'var(--green)', fontSize:13, fontWeight:700, cursor:'pointer',
-          }}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </button>
-        </div>
-
-        {err && <div style={{ marginTop:10, fontSize:11, color:'var(--red)', fontFamily:'var(--mono)' }}>{err}</div>}
-      </div>
-    </div>
-  )
-}
-
 function UserMenu({ user, onLogout, onGoToSettings }) {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef(null)
@@ -186,11 +78,11 @@ function UserMenu({ user, onLogout, onGoToSettings }) {
         title={user.displayName || user.email}
         style={{
           width:34, height:34, borderRadius:'50%',
-          border: open ? '2px solid var(--green)' : '2px solid var(--green)',
+          border: open ? '2px solid var(--green)' : '2px solid var(--green2)',
           background: user.photoURL ? 'transparent' : 'var(--green-dim)',
           padding:0, overflow:'hidden', cursor:'pointer',
           display:'flex', alignItems:'center', justifyContent:'center',
-          boxShadow: open ? '0 0 0 3px var(--green-glow)' : '0 0 0 2px var(--green-glow)',
+          boxShadow: open ? '0 0 0 3px var(--green-glow)' : 'none',
           transition:'box-shadow .15s, border-color .15s',
           flexShrink:0,
         }}
@@ -260,11 +152,10 @@ function UserMenu({ user, onLogout, onGoToSettings }) {
 }
 
 export default function App() {
-  const [activeTab,      setActiveTab]      = useState('15m')
-  const [user,           setUser]           = useState(null)
-  const [authReady,      setAuthReady]      = useState(false)
-  const [alertCounts,    setAlertCounts]    = useState({})
-  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [activeTab,   setActiveTab]   = useState('15m')
+  const [user,        setUser]        = useState(null)
+  const [authReady,   setAuthReady]   = useState(false)
+  const [alertCounts, setAlertCounts] = useState({})
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -306,9 +197,6 @@ export default function App() {
 
   return (
     <div className="app-shell-v2">
-      {showLoginModal && (
-        <LoginModal onClose={() => setShowLoginModal(false)} onUserChange={u => { setUser(u); setShowLoginModal(false) }} />
-      )}
       <header className="topbar-v2">
         {/* Logo acts as Home button → goes to 15m tab */}
         <button onClick={() => setActiveTab('15m')} title="Home · go to 15m"
@@ -334,38 +222,21 @@ export default function App() {
               <span style={{ fontFamily:'var(--mono)',fontSize:10,fontWeight:700,color:activeTabCfg.color }}>{activeTab}</span>
             </div>
           )}
-
-          {/* Settings button — always visible in topbar */}
-          <button
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-            style={{
-              width:32, height:32, borderRadius:8, flexShrink:0,
-              border: activeTab==='settings' ? '1.5px solid var(--accent)' : '1.5px solid var(--border2)',
-              background: activeTab==='settings' ? 'var(--accent-dim)' : 'var(--bg2)',
-              display:'flex', alignItems:'center', justifyContent:'center',
-              cursor:'pointer', transition:'all .15s',
-              color: activeTab==='settings' ? 'var(--accent)' : 'var(--text3)',
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
-            onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='settings'?'var(--accent)':'var(--border2)'
-              e.currentTarget.style.color=activeTab==='settings'?'var(--accent)':'var(--text3)'
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{transition:'transform .3s',transform:activeTab==='settings'?'rotate(45deg)':'rotate(0deg)'}}>
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
-
-          {/* User icon — opens login modal when logged out, user menu when logged in */}
+          {/* Cloud sync badge */}
+          {user && (
+            <span style={{ fontSize:10,fontFamily:'var(--mono)',fontWeight:700,padding:'3px 7px',borderRadius:10,
+              color: cloudSaving?'var(--amber)':cloudSynced?'var(--green)':'var(--text3)',
+              background: cloudSaving?'rgba(255,167,38,.12)':cloudSynced?'var(--green-dim)':'rgba(255,255,255,0.05)',
+              border:`1px solid ${cloudSaving?'var(--amber)':cloudSynced?'var(--green2)':'var(--border)'}` }}>
+              {cloudSaving?'⟳':cloudSynced?'☁✓':'☁'}
+            </span>
+          )}
+          {/* User icon — ALWAYS visible. Shows login icon when logged out */}
           {user ? (
             <UserMenu user={user} onLogout={handleLogout} onGoToSettings={() => setActiveTab('settings')} />
           ) : (
             <button
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => setActiveTab('settings')}
               title="Sign in"
               style={{
                 width:32, height:32, borderRadius:'50%', flexShrink:0,
@@ -373,7 +244,7 @@ export default function App() {
                 display:'flex', alignItems:'center', justifyContent:'center',
                 cursor:'pointer', transition:'border-color .15s, background .15s',
               }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--green)';e.currentTarget.style.background='var(--green-dim)'}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-dim)'}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--bg2)'}}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round">
