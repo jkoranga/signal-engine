@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, Component } from 'react'
+import React, { useState, useCallback, useEffect, Component } from 'react'
 import { useSettings } from './hooks/useSettings.js'
 import TFScannerTab from './components/TFScannerTab.jsx'
 import SettingsTab from './components/SettingsTab.jsx'
@@ -37,17 +37,117 @@ class ErrorBoundary extends Component {
   }
 }
 
-function LogoMark({ size=26 }) {
+function LogoMark({ size=32 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
-      <rect width="28" height="28" rx="7" fill="#060a12"/>
-      <rect x="5" y="9" width="5" height="10" rx="1" fill="#00e676"/>
-      <line x1="7.5" y1="5" x2="7.5" y2="9" stroke="#00e676" strokeWidth="1.8"/>
-      <line x1="7.5" y1="19" x2="7.5" y2="23" stroke="#00e676" strokeWidth="1.8"/>
-      <rect x="18" y="7" width="5" height="11" rx="1" fill="#ff4757"/>
-      <line x1="20.5" y1="3" x2="20.5" y2="7" stroke="#ff4757" strokeWidth="1.8"/>
-      <line x1="20.5" y1="18" x2="20.5" y2="24" stroke="#ff4757" strokeWidth="1.8"/>
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="8" fill="#060c14"/>
+      <rect x="1" y="1" width="30" height="30" rx="7.5" stroke="#00e676" strokeOpacity="0.18" strokeWidth="1"/>
+      {/* Signal waveform: flat → spike → flat */}
+      <polyline
+        points="3,20 8,20 10,12 12,24 14,16 16,8 18,22 20,18 22,14 24,20 29,20"
+        stroke="#00e676"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      {/* Highlight dot at the peak */}
+      <circle cx="16" cy="8" r="2" fill="#00e676" opacity="0.9"/>
     </svg>
+  )
+}
+
+function UserMenu({ user, onLogout, onGoToSettings }) {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler) }
+  }, [open])
+
+  const initial = (user.displayName || user.email || '?')[0].toUpperCase()
+
+  return (
+    <div ref={ref} style={{ position:'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title={user.displayName || user.email}
+        style={{
+          width:34, height:34, borderRadius:'50%',
+          border: open ? '2px solid var(--green)' : '2px solid var(--green2)',
+          background: user.photoURL ? 'transparent' : 'var(--green-dim)',
+          padding:0, overflow:'hidden', cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow: open ? '0 0 0 3px var(--green-glow)' : 'none',
+          transition:'box-shadow .15s, border-color .15s',
+          flexShrink:0,
+        }}
+      >
+        {user.photoURL
+          ? <img src={user.photoURL} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+          : <span style={{ fontWeight:800, fontSize:14, color:'var(--green)', fontFamily:'var(--font)' }}>{initial}</span>
+        }
+      </button>
+
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 8px)', right:0,
+          background:'var(--bg2)', border:'1px solid var(--border2)',
+          borderRadius:10, padding:6, minWidth:200,
+          boxShadow:'0 8px 32px rgba(0,0,0,.6)', zIndex:200,
+        }}>
+          {/* User info row */}
+          <div style={{ padding:'8px 10px 10px', borderBottom:'1px solid var(--border)' }}>
+            <div style={{ fontWeight:700, fontSize:13, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {user.displayName || 'User'}
+            </div>
+            <div style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:2 }}>
+              {user.email}
+            </div>
+          </div>
+
+          {/* Account settings link */}
+          <button
+            onClick={() => { setOpen(false); onGoToSettings() }}
+            style={{
+              display:'flex', alignItems:'center', gap:9, width:'100%',
+              padding:'9px 10px', borderRadius:7, marginTop:4,
+              fontSize:13, fontWeight:500, color:'var(--text2)',
+              background:'transparent', transition:'background .1s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background='var(--bg3)'}
+            onMouseLeave={e => e.currentTarget.style.background='transparent'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            </svg>
+            Account &amp; Sync
+          </button>
+
+          {/* Sign out */}
+          <button
+            onClick={() => { setOpen(false); onLogout() }}
+            style={{
+              display:'flex', alignItems:'center', gap:9, width:'100%',
+              padding:'9px 10px', borderRadius:7, marginTop:2,
+              fontSize:13, fontWeight:500, color:'var(--red)',
+              background:'transparent', transition:'background .1s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background='var(--red-dim)'}
+            onMouseLeave={e => e.currentTarget.style.background='transparent'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -89,17 +189,23 @@ export default function App() {
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
 
+  async function handleLogout() {
+    const { logout } = await import('./firebase.js')
+    await logout()
+    setUser(null)
+  }
+
   return (
     <div className="app-shell-v2">
       <header className="topbar-v2">
         <div style={{ display:'flex',alignItems:'center',gap:9 }}>
-          <LogoMark />
+          <LogoMark size={32} />
           <div>
-            <div style={{ fontWeight:800,fontSize:16,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.1 }}>EMA Sigma</div>
+            <div style={{ fontWeight:800,fontSize:16,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.1 }}>Signal Engine</div>
             <div style={{ fontFamily:'var(--mono)',fontSize:9,color:'var(--text3)',letterSpacing:'.08em' }}>BINANCE · {VERSION}</div>
           </div>
         </div>
-        <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:8,marginLeft:'auto' }}>
           {activeTab !== 'settings' && activeTabCfg && (
             <div style={{ display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,
               background:`${activeTabCfg.color}14`,border:`1px solid ${activeTabCfg.color}44` }}>
@@ -115,6 +221,13 @@ export default function App() {
               border:`1px solid ${cloudSaving?'var(--amber)':cloudSynced?'var(--green2)':'var(--border)'}` }}>
               {cloudSaving?'⟳':cloudSynced?'☁✓':'☁'}
             </span>
+          )}
+          {user && (
+            <UserMenu
+              user={user}
+              onLogout={handleLogout}
+              onGoToSettings={() => setActiveTab('settings')}
+            />
           )}
         </div>
       </header>

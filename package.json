@@ -1,6 +1,6 @@
 {
-  "name": "advance-candle-formation-alert",
-  "version": "1.0.0",
+  "name": "signal-engine-v2",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,5 +16,5 @@
     "@vitejs/plugin-react": "^4.4.1",
     "vite": "^5.4.0"
   },
-  "description": "Advance Candle Formation Alert (ACF) - Binance Scanner"
+  "description": "Signal Engine v2 — Multi-TF EMA Scanner for Binance"
 }

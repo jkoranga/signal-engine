@@ -1,4 +1,4 @@
-// firebase.js — EMA Sigma v2.0
+// firebase.js — Signal Engine v2.0
 // Firebase project: signal-engines
 
 import { initializeApp, getApps } from 'firebase/app'
@@ -63,7 +63,7 @@ export async function saveSettingsToCloud(uid, settings) {
     await setDoc(ref, { ...settings, _savedAt: Date.now() }, { merge: true })
     return true
   } catch (e) {
-    console.warn('[EMA Sigma] saveSettings failed:', e.message)
+    console.warn('[Signal Engine] saveSettings failed:', e.message)
     return false
   }
 }
@@ -75,7 +75,7 @@ export async function loadSettingsFromCloud(uid) {
     const snap = await getDoc(ref)
     return snap.exists() ? snap.data() : null
   } catch (e) {
-    console.warn('[EMA Sigma] loadSettings failed:', e.message)
+    console.warn('[Signal Engine] loadSettings failed:', e.message)
     return null
   }
 }
