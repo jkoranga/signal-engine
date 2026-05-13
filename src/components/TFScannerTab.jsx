@@ -393,19 +393,20 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     if (loopRef.current) { setLoopCount(c=>c+1); setTimeout(()=>runScan(symOverride),300) }
   }, [timeframe]) // eslint-disable-line
 
-  // Initial scan for 15m only (or active tab)
+  // Initial scan — only for 15m (default tab), 3 seconds after page load
   const initialScanDone = useRef(false)
   useEffect(() => {
-    if (timeframe !== '15m') return  // only auto-scan 15m on first load
+    if (timeframe !== '15m') return
     if (initialScanDone.current) return
     initialScanDone.current = true
     const tryRun = () => {
-      if (symbolsRef.current.length>0) {
-        if (isFirstVisit) runScan(symbolsRef.current.slice(0,200))
-        else runScan()
-      } else { setTimeout(tryRun, 500) }
+      if (symbolsRef.current.length > 0) {
+        runScan()
+      } else {
+        setTimeout(tryRun, 500)
+      }
     }
-    setTimeout(tryRun, 800)
+    setTimeout(tryRun, 3000)
   }, []) // eslint-disable-line
 
   // Auto-scan interval

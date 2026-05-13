@@ -266,6 +266,7 @@ export default function App() {
   const [alertCounts,    setAlertCounts]    = useState({})
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
+  const [settingsOpenCount, setSettingsOpenCount] = useState(0)
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -300,6 +301,12 @@ export default function App() {
   const handleScanProgress = useCallback((pct, color) => {
     setScanProgress({ pct, color })
   }, [])
+
+  // Wrap tab navigation — counts each Settings visit to collapse accordions
+  function navigateTo(tab) {
+    if (tab === 'settings') setSettingsOpenCount(c => c + 1)
+    setActiveTab(tab)
+  }
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
 
@@ -366,7 +373,7 @@ export default function App() {
 
           {/* Settings button — always visible in topbar */}
           <button
-            onClick={() => setActiveTab('settings')}
+            onClick={() => navigateTo('settings')}
             title="Settings"
             style={{
               width:32, height:32, borderRadius:8, flexShrink:0,
@@ -391,7 +398,7 @@ export default function App() {
 
           {/* User icon — opens login modal when logged out, user menu when logged in */}
           {user ? (
-            <UserMenu user={user} onLogout={handleLogout} onGoToSettings={() => setActiveTab('settings')} />
+            <UserMenu user={user} onLogout={handleLogout} onGoToSettings={() => navigateTo('settings')} />
           ) : (
             <button
               onClick={() => setShowLoginModal(true)}
@@ -435,7 +442,7 @@ export default function App() {
           <ErrorBoundary>
             <SettingsTab settings={settings} set={set} update={update} reset={reset}
               user={user} onUserChange={setUser} cloudSynced={cloudSynced}
-              cloudSaving={cloudSaving} onSaveNow={saveNow} />
+              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} />
           </ErrorBoundary>
         )}
       </main>
@@ -445,7 +452,7 @@ export default function App() {
           const isActive = activeTab === tab.id
           const count = !tab.isSettings ? (alertCounts[tab.id] || 0) : 0
           return (
-            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}`} onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}`} onClick={() => navigateTo(tab.id)}
               style={{ color: isActive?tab.color:'var(--text3)',
                 background: isActive?`${tab.color}10`:'transparent',
                 borderTop: isActive?`2px solid ${tab.color}`:'2px solid transparent' }}>

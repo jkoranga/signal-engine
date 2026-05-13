@@ -8,8 +8,16 @@ import CustomPairsSection from './sections/CustomPairsSection.jsx'
 import AccountSection from './sections/AccountSection.jsx'
 
 // ── Accordion ─────────────────────────────────────────────
-function Accordion({ title, icon, badge, defaultOpen=false, children, accentColor }) {
+function Accordion({ title, icon, badge, defaultOpen=false, children, accentColor, openKey }) {
   const [open, setOpen] = useState(defaultOpen)
+  // Close whenever openKey changes (i.e. settings tab is re-opened)
+  const prevKeyRef = React.useRef(openKey)
+  React.useEffect(() => {
+    if (openKey !== prevKeyRef.current) {
+      prevKeyRef.current = openKey
+      setOpen(false)
+    }
+  }, [openKey])
   return (
     <div style={{
       border:`1.5px solid ${open&&accentColor?accentColor:'var(--border)'}`,
@@ -310,9 +318,11 @@ function PatternManager({ settings, update }) {
 }
 
 // ── Main SettingsTab ──────────────────────────────────────
-export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow }) {
+export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, openCount=0 }) {
   const [resetMsg, setResetMsg] = React.useState('')
   const [resetConfirm, setResetConfirm] = React.useState(false)
+  // openCount increments from parent each time Settings tab is visited → collapses all accordions
+  const openKey = openCount
 
   function handleReset() {
     if (!resetConfirm) {
@@ -336,18 +346,18 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
       </div>
 
       {/* Account */}
-      <Accordion title="Account & Sync" icon="👤" defaultOpen={false} accentColor="var(--accent)">
+      <Accordion title="Account & Sync" icon="👤" defaultOpen={false} accentColor="var(--accent)" openKey={openKey}>
         <AccountSection user={user} onUserChange={onUserChange}
           cloudSynced={cloudSynced} cloudSaving={cloudSaving} onSaveNow={onSaveNow}/>
       </Accordion>
 
       {/* Scan settings */}
-      <Accordion title="Scan Settings" icon="⬡" badge="GLOBAL" defaultOpen={true} accentColor="var(--accent)">
+      <Accordion title="Scan Settings" icon="⬡" badge="GLOBAL" defaultOpen={false} accentColor="var(--accent)" openKey={openKey}>
         <ScanSettingsSection settings={settings} update={update}/>
       </Accordion>
 
       {/* Pattern manager */}
-      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)">
+      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)" openKey={openKey}>
         <div style={{background:'rgba(150,100,255,0.07)',border:'1px solid rgba(150,100,255,0.22)',borderRadius:8,padding:'8px 11px',marginBottom:10}}>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'#b388ff',fontWeight:700,marginBottom:2}}>⚡ EMA + RSI Patterns — per-timeframe</div>
           <div style={{fontSize:10,color:'var(--text3)',lineHeight:1.5}}>
@@ -358,22 +368,22 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
       </Accordion>
 
       {/* Alerts */}
-      <Accordion title="Alerts & Notifications" icon="◈" defaultOpen={false} accentColor="rgba(255,167,38,0.5)">
+      <Accordion title="Alerts & Notifications" icon="◈" defaultOpen={false} accentColor="rgba(255,167,38,0.5)" openKey={openKey}>
         <AlertsSection cfg={settings} set={set}/>
       </Accordion>
 
       {/* Appearance */}
-      <Accordion title="Appearance" icon="◑" defaultOpen={false}>
+      <Accordion title="Appearance" icon="◑" defaultOpen={false} openKey={openKey}>
         <AppearanceSection cfg={settings} set={set}/>
       </Accordion>
 
       {/* Signal strength */}
-      <Accordion title="Signal Strength Filters" icon="◉" defaultOpen={false} accentColor="rgba(0,184,217,0.4)">
+      <Accordion title="Signal Strength Filters" icon="◉" defaultOpen={false} accentColor="rgba(0,184,217,0.4)" openKey={openKey}>
         <SignalStrengthSection cfg={settings} set={set}/>
       </Accordion>
 
       {/* Custom pairs */}
-      <Accordion title="Custom Pairs" icon="⊞" defaultOpen={false} accentColor="rgba(179,136,255,0.4)">
+      <Accordion title="Custom Pairs" icon="⊞" defaultOpen={false} accentColor="rgba(179,136,255,0.4)" openKey={openKey}>
         <CustomPairsSection cfg={settings} set={set}/>
       </Accordion>
 
