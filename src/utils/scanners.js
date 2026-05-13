@@ -16,6 +16,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'Triple slope + EMA stack + body ≥20% + tight wick tag + RSI>50',
     badge: 'BULL', badgeCls: 'badge-green',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20[-2] > EMA20[-12] × 1.0035  (long slope ≥ 0.35%)',
       'EMA20[-2] > EMA20[-5] × 1.0015   (near slope ≥ 0.15%)',
@@ -139,6 +140,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'Triple slope falling + EMA stack + body ≥20% + tight wick tag + RSI<50',
     badge: 'BEAR', badgeCls: 'badge-red',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20[-2] < EMA20[-12] × 0.9965  (long slope ≤ -0.35%)',
       'EMA20[-2] < EMA20[-5] × 0.9985   (near slope ≤ -0.15%)',
@@ -266,6 +268,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'EMA20 uptrend dip → recross above EMA20 with tight body',
     badge: 'BULL', badgeCls: 'badge-green',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20 > EMA40 × 1.0075  (strong uptrend)',
       'EMA20[-10] > EMA50[-10] × 1.0075  (established trend)',
@@ -355,6 +358,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'EMA20 downtrend spike → recross below EMA20 with tight body',
     badge: 'BEAR', badgeCls: 'badge-red',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20 < EMA40 × 0.9925  (strong downtrend)',
       'EMA20[-10] < EMA50[-10] × 0.9925  (established downtrend)',
@@ -448,6 +452,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'EMA20+EMA40 rising 5 bars + green after red + low tags EMA20 + EMA9>20>40',
     badge: 'BULL', badgeCls: 'badge-green',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20 ptc > 0.1% for each of candles -4 → 0  (5 consecutive bars rising)',
       'EMA40 ptc > 0.1% for same 5 consecutive candles',
@@ -562,6 +567,7 @@ export const ADVANCED_SCANNERS = [
     sub: 'EMA20+EMA40 falling 5 bars + red after green + high tags EMA20 + EMA9<20<40',
     badge: 'BEAR', badgeCls: 'badge-red',
     group: 'advanced',
+    tfs: ['15m', '1h'],
     conditions: [
       'EMA20 ptc < -0.1% for each of candles -4 → 0  (5 consecutive bars falling)',
       'EMA40 ptc < -0.1% for same 5 consecutive candles',
@@ -664,3 +670,20 @@ export const ADVANCED_SCANNERS = [
 
 // Combined for convenience
 export const ALL_SCANNERS = [...SCANNERS, ...ADVANCED_SCANNERS]
+
+// ── TF metadata — add new TFs here once, tabs auto-appear ─────────────────────
+export const TF_ORDER = ['1m','3m','5m','15m','30m','1h','2h','4h','6h','12h','1d']
+
+export const TF_META = {
+  '1m':  { id:'1m',  label:'1m',  color:'#ff6b6b', desc:'Scalping' },
+  '3m':  { id:'3m',  label:'3m',  color:'#ffa94d', desc:'Fast momentum' },
+  '5m':  { id:'5m',  label:'5m',  color:'#ffd43b', desc:'Short-term' },
+  '15m': { id:'15m', label:'15m', color:'#69db7c', desc:'Intraday trend' },
+  '30m': { id:'30m', label:'30m', color:'#38d9a9', desc:'Mid intraday' },
+  '1h':  { id:'1h',  label:'1h',  color:'#4dabf7', desc:'Swing conditions' },
+  '2h':  { id:'2h',  label:'2h',  color:'#74c0fc', desc:'Extended swing' },
+  '4h':  { id:'4h',  label:'4h',  color:'#9775fa', desc:'Position setups' },
+  '6h':  { id:'6h',  label:'6h',  color:'#e599f7', desc:'Daily prep' },
+  '12h': { id:'12h', label:'12h', color:'#f783ac', desc:'Overnight range' },
+  '1d':  { id:'1d',  label:'Day', color:'#ffc078', desc:'Macro trend' },
+}

@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Toggle } from './UI.jsx'
-import { ALL_SCANNERS } from '../utils/scanners.js'
+import { ALL_SCANNERS, TF_META, TF_ORDER } from '../utils/scanners.js'
 import { sendTelegram } from '../utils/scanner.js'
 import { AppearanceSection, AlertsSection } from './sections/GeneralSections.jsx'
 import { SignalStrengthSection } from './sections/FilterSections.jsx'
@@ -55,8 +55,17 @@ function ScannerDefCard({ scanner, expanded, onTap, enabled, onToggle }) {
       <div style={{display:'flex',alignItems:'center',gap:10,padding:'11px 13px',cursor:'pointer',minHeight:54}} onClick={onTap}>
         <span style={{fontSize:20,flexShrink:0}}>{scanner.icon}</span>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
+          <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2,flexWrap:'wrap'}}>
             <div style={{fontWeight:700,fontSize:13,color:enabled?col:'var(--text2)',letterSpacing:'-.01em'}}>{scanner.name}</div>
+            {scanner.tfs && scanner.tfs.map(tf => (
+              <span key={tf} style={{
+                fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
+                padding:'1px 5px', borderRadius:4,
+                background: enabled ? `${col}18` : 'var(--bg3)',
+                color: enabled ? col : 'var(--text3)',
+                border: `1px solid ${enabled ? col+'44' : 'var(--border)'}`,
+              }}>{tf}</span>
+            ))}
           </div>
           <div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:1.4}}>{scanner.sub}</div>
         </div>
@@ -167,19 +176,22 @@ function ScanSettingsSection({ settings, update }) {
 }
 
 // ── Pattern Manager with TF tabs ─────────────────────────────────────────────
-const TF_PATTERN_TABS = [
-  { id: 'global', label: 'All TF', color: '#00b8d9', desc: 'Default for all scanners' },
-  { id: '1m',  label: '1m',  color: '#ff6b6b', desc: 'Scalping conditions' },
-  { id: '3m',  label: '3m',  color: '#ffa94d', desc: 'Fast momentum' },
-  { id: '5m',  label: '5m',  color: '#ffd43b', desc: 'Short-term setups' },
-  { id: '15m', label: '15m', color: '#69db7c', desc: 'Intraday trend' },
-  { id: '1h',  label: '1h',  color: '#4dabf7', desc: 'Swing conditions' },
-  { id: '4h',  label: '4h',  color: '#9775fa', desc: 'Position setups' },
-  { id: '1d',  label: 'Day', color: '#f783ac', desc: 'Macro trend setups' },
-]
+// TF tabs are derived dynamically from scanner tfs[] fields — no need to edit
+// this file when adding new patterns. Just add tfs:['Xm'] to the scanner def.
+const GLOBAL_TAB = { id: 'global', label: 'All TF', color: '#00b8d9', desc: 'Default for all scanners' }
 
 function PatternManager({ settings, update }) {
   const [expanded, setExpanded] = useState({})
+
+  // Build TF tabs from whatever TFs scanners actually declare — auto-expands
+  const TF_PATTERN_TABS = useMemo(() => {
+    const used = new Set(ALL_SCANNERS.flatMap(s => s.tfs ?? []))
+    const tfTabs = TF_ORDER
+      .filter(tf => used.has(tf))
+      .map(tf => TF_META[tf])
+      .filter(Boolean)
+    return [GLOBAL_TAB, ...tfTabs]
+  }, [])
   const [sideFilter, setSideFilter] = useState('all')
   const [activeTF, setActiveTF] = useState('global')
 
@@ -216,8 +228,14 @@ function PatternManager({ settings, update }) {
   }
 
   const enabledMap = getEnabledForTF(activeTF)
-  const enabledCount = ALL_SCANNERS.filter(s => enabledMap[s.id]).length
-  const visible = ALL_SCANNERS.filter(s => sideFilter === 'all' || s.side === sideFilter)
+
+  // On a specific TF tab, only show scanners that declare that TF (or all on global)
+  const visible = ALL_SCANNERS.filter(s => {
+    if (sideFilter !== 'all' && s.side !== sideFilter) return false
+    if (activeTF !== 'global' && s.tfs && !s.tfs.includes(activeTF)) return false
+    return true
+  })
+  const enabledCount = visible.filter(s => enabledMap[s.id]).length
 
   return (
     <div>
@@ -301,8 +319,13 @@ function PatternManager({ settings, update }) {
       </div>
 
       <div style={{ fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginBottom:10 }}>
-        {enabledCount}/{ALL_SCANNERS.length} active for{' '}
+        {enabledCount}/{visible.length} active for{' '}
         <span style={{ color:activeTFCfg.color }}>{activeTFCfg.label}</span>
+        {activeTF !== 'global' && (
+          <span style={{ marginLeft:6, color:'var(--text3)' }}>
+            · {ALL_SCANNERS.length} total patterns
+          </span>
+        )}
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
