@@ -464,6 +464,25 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     <div style={{ paddingBottom: 4 }}>
       <DetailSheet alert={selectedAlert} onClose={()=>setSelectedAlert(null)}/>
 
+      {/* ── Sticky progress bar — just below topbar border, no symbol text ── */}
+      <div style={{
+        position:'sticky', top:0, zIndex:50,
+        marginLeft:-12, marginRight:-12, marginBottom: scanning ? 8 : 0,
+        height: scanning ? 3 : 0,
+        overflow:'hidden',
+        transition:'height .2s',
+        background:'var(--bg3)',
+      }}>
+        <div style={{
+          height:'100%',
+          width:`${progress}%`,
+          background:tabColor,
+          boxShadow:`0 0 8px ${tabColor}99`,
+          transition:'width .2s',
+          borderRadius:0,
+        }}/>
+      </div>
+
       {/* ── TF header ── */}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,gap:8 }}>
         <div>
@@ -561,15 +580,22 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
         </div>
       </div>
 
-      {/* ── Scan mode pills ── */}
-      <div style={{ display:'flex',gap:4,flexWrap:'wrap',marginBottom:10 }}>
+      {/* ── Scan mode pills — single scrollable row ── */}
+      <div style={{
+        display:'flex', gap:4, flexWrap:'nowrap', marginBottom:10,
+        overflowX:'auto', WebkitOverflowScrolling:'touch',
+        scrollbarWidth:'none', msOverflowStyle:'none',
+        marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
+        paddingBottom:2,
+      }}>
         {SCAN_MODES.map(m=>(
           <button key={m.id} onClick={()=>setScanMode(m.id)} style={{
             display:'flex',alignItems:'center',gap:4,padding:'5px 11px',borderRadius:20,cursor:'pointer',
             border:`1.5px solid ${scanMode===m.id?m.bd:'var(--border)'}`,
             background:scanMode===m.id?m.bg:'var(--bg2)',
             color:scanMode===m.id?m.col:'var(--text3)',
-            fontWeight:scanMode===m.id?700:400,fontSize:11,fontFamily:'var(--mono)',transition:'all .15s',
+            fontWeight:scanMode===m.id?700:400,fontSize:11,fontFamily:'var(--mono)',
+            transition:'all .15s', flexShrink:0, whiteSpace:'nowrap',
           }}>
             <span style={{fontSize:12}}>{m.icon}</span>
             <span>{m.label}</span>
@@ -595,15 +621,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
 
 
 
-      {/* Progress bar */}
-      {scanning&&(
-        <div style={{ marginBottom:10 }}>
-          <div style={{ display:'flex',justifyContent:'space-between',marginBottom:3 }}>
-            <span style={{ fontFamily:'var(--mono)',fontSize:10,color:'var(--amber)',fontWeight:700 }}>{progressSym} — {progress}%</span>
-          </div>
-          <div className="progress-bar-wrap"><div className="progress-bar-fill" style={{ width:`${progress}%`,background:tabColor }}/></div>
-        </div>
-      )}
+
 
       {errors.length>0&&(
         <div className="error-banner">

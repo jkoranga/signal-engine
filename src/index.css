@@ -410,6 +410,9 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
   transition: width .2s;
 }
 
+/* ── Scan mode pill row — hide scrollbar ── */
+.scan-mode-row::-webkit-scrollbar { display: none; }
+
 /* ── Sort btn ── */
 .sort-btn {
   padding: 4px 9px;

@@ -16,7 +16,7 @@ export const DEFAULTS = {
   timeframe:    '15m',
   scanInterval: '1m',
   darkMode:     true,
-  symbolSet:    'top200',
+  symbolSet:    'all',
   customPairs:  DEFAULT_30_PAIRS,
   scanMode:       'all',
   autoScan:       false,
