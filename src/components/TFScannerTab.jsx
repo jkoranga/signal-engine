@@ -208,7 +208,7 @@ function DetailSheet({ alert, onClose }) {
 }
 
 // ── Main TFScannerTab ─────────────────────────────────────
-export default function TFScannerTab({ timeframe, tabColor, settings, update, user, isFirstVisit, isActive, onAlertCount }) {
+export default function TFScannerTab({ timeframe, tabColor, settings, update, user, isFirstVisit, isActive, onAlertCount, onScanProgress }) {
   // Per-tab persistent settings stored under tf-specific keys
   const tfKey = tf => `${tf}_${timeframe}`
   const scanMode      = settings[tfKey('scanMode')]      ?? settings.scanMode      ?? 'all'
@@ -303,6 +303,11 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   useEffect(() => {
     onAlertCount?.(timeframe, alerts.length)
   }, [alerts.length, timeframe, onAlertCount])
+
+  // Report scanning progress to parent (for topbar progress bar)
+  useEffect(() => {
+    if (isActive) onScanProgress?.(scanning ? progress : -1, tabColor)
+  }, [scanning, progress, isActive, tabColor, onScanProgress])
 
   function isDupe(symbol, scannerId, tf) {
     const key = `${symbol}__${scannerId}__${tf}`
@@ -463,25 +468,6 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   return (
     <div style={{ paddingBottom: 4 }}>
       <DetailSheet alert={selectedAlert} onClose={()=>setSelectedAlert(null)}/>
-
-      {/* ── Sticky progress bar — just below topbar border, no symbol text ── */}
-      <div style={{
-        position:'sticky', top:0, zIndex:50,
-        marginLeft:-12, marginRight:-12, marginBottom: scanning ? 8 : 0,
-        height: scanning ? 3 : 0,
-        overflow:'hidden',
-        transition:'height .2s',
-        background:'var(--bg3)',
-      }}>
-        <div style={{
-          height:'100%',
-          width:`${progress}%`,
-          background:tabColor,
-          boxShadow:`0 0 8px ${tabColor}99`,
-          transition:'width .2s',
-          borderRadius:0,
-        }}/>
-      </div>
 
       {/* ── TF header ── */}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,gap:8 }}>

@@ -265,6 +265,7 @@ export default function App() {
   const [authReady,      setAuthReady]      = useState(false)
   const [alertCounts,    setAlertCounts]    = useState({})
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -296,6 +297,10 @@ export default function App() {
     setAlertCounts(prev => ({ ...prev, [tf]: count }))
   }, [])
 
+  const handleScanProgress = useCallback((pct, color) => {
+    setScanProgress({ pct, color })
+  }, [])
+
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
 
   async function handleLogout() {
@@ -309,7 +314,31 @@ export default function App() {
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} onUserChange={u => { setUser(u); setShowLoginModal(false) }} />
       )}
-      <header className="topbar-v2">
+      <header className="topbar-v2" style={{
+        borderBottom: 'none',
+        boxShadow: scanProgress.pct >= 0
+          ? `inset 0 -2px 0 var(--border), inset 0 -2px 0 transparent`
+          : 'inset 0 -1px 0 var(--border)',
+        position: 'relative',
+      }}>
+        {/* Progress bar — replaces bottom border, no layout shift */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: 2, overflow: 'hidden', zIndex: 1,
+        }}>
+          {/* Track (always visible as border) */}
+          <div style={{ position:'absolute', inset:0, background:'var(--border)' }}/>
+          {/* Fill */}
+          {scanProgress.pct >= 0 && (
+            <div style={{
+              position:'absolute', top:0, left:0, bottom:0,
+              width: `${scanProgress.pct}%`,
+              background: scanProgress.color,
+              boxShadow: `0 0 8px ${scanProgress.color}cc`,
+              transition: 'width .2s linear',
+            }}/>
+          )}
+        </div>
         {/* Logo acts as Home button → goes to 15m tab */}
         <button onClick={() => setActiveTab('15m')} title="Home · go to 15m"
           style={{ display:'flex',alignItems:'center',gap:8,background:'none',border:'none',
@@ -397,6 +426,7 @@ export default function App() {
                 isFirstVisit={isFirstVisit && tab.id==='15m'}
                 isActive={activeTab===tab.id}
                 onAlertCount={handleAlertCount}
+                onScanProgress={handleScanProgress}
               />
             </ErrorBoundary>
           </div>

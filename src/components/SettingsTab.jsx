@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Toggle } from './UI.jsx'
 import { ALL_SCANNERS } from '../utils/scanners.js'
 import { sendTelegram } from '../utils/scanner.js'
@@ -311,6 +311,20 @@ function PatternManager({ settings, update }) {
 
 // ── Main SettingsTab ──────────────────────────────────────
 export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow }) {
+  const [resetMsg, setResetMsg] = React.useState('')
+  const [resetConfirm, setResetConfirm] = React.useState(false)
+
+  function handleReset() {
+    if (!resetConfirm) {
+      setResetConfirm(true)
+      setTimeout(() => setResetConfirm(false), 3000)
+      return
+    }
+    reset()
+    setResetConfirm(false)
+    setResetMsg('✓ Settings reset to defaults')
+    setTimeout(() => setResetMsg(''), 3500)
+  }
   return (
     <div>
       {/* Header */}
@@ -370,11 +384,21 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
             <div style={{ fontWeight:700,fontSize:14,color:'var(--text)',marginBottom:3 }}>Reset All Settings</div>
             <div style={{ fontSize:11,fontFamily:'var(--mono)',color:'var(--text3)' }}>Restore defaults across all tabs</div>
           </div>
-          <button onClick={reset} style={{ padding:'8px 16px',borderRadius:8,border:'1.5px solid var(--red2)',
-            background:'var(--red-dim)',color:'var(--red)',fontSize:13,fontWeight:700,cursor:'pointer' }}>
-            ↺ Reset
+          <button onClick={handleReset} style={{ padding:'8px 16px',borderRadius:8,
+            border:`1.5px solid ${resetConfirm ? 'var(--red)' : 'var(--red2)'}`,
+            background: resetConfirm ? 'var(--red)' : 'var(--red-dim)',
+            color: resetConfirm ? '#fff' : 'var(--red)',
+            fontSize:13,fontWeight:700,cursor:'pointer',transition:'all .15s',whiteSpace:'nowrap' }}>
+            {resetConfirm ? '⚠ Confirm?' : '↺ Reset'}
           </button>
         </div>
+        {resetMsg && (
+          <div style={{ marginTop:10,fontSize:12,fontFamily:'var(--mono)',color:'var(--green)',
+            background:'var(--green-dim)',border:'1px solid var(--green2)',
+            borderRadius:6,padding:'6px 10px' }}>
+            {resetMsg}
+          </div>
+        )}
       </div>
 
       <div style={{ height:20 }}/>

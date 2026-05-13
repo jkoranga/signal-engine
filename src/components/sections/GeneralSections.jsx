@@ -61,10 +61,11 @@ export function TimeframeSection({ cfg, set }) {
 }
 
 // ── Alerts & Notifications ────────────────────────────────────────────────────
-function TgTestBtn({ token, chatId }) {
+function TgTestBtn({ token, chatId, onSave }) {
   const [st, setSt] = useState('idle')
   const send = async () => {
     if (!token || !chatId) { setSt('fail'); setTimeout(() => setSt('idle'), 3000); return }
+    onSave?.() // flush buffered values to settings before test
     setSt('sending')
     try {
       await sendTelegram(token, chatId, '✅ Candle Alert — Telegram connected successfully!')
@@ -85,6 +86,14 @@ function TgTestBtn({ token, chatId }) {
 }
 
 export function AlertsSection({ cfg, set }) {
+  // Buffer telegram fields locally — flush to settings on blur to avoid stale-closure issues
+  const [tgToken,  setTgToken]  = React.useState(cfg.tgToken  || '')
+  const [tgChatId, setTgChatId] = React.useState(cfg.tgChatId || '')
+
+  // Sync if parent settings change externally (e.g. reset)
+  React.useEffect(() => { setTgToken(cfg.tgToken  || '') }, [cfg.tgToken])
+  React.useEffect(() => { setTgChatId(cfg.tgChatId || '') }, [cfg.tgChatId])
+
   return (
     <div>
       <SectionHeader title="Alerts & Notifications" sub="Sound, Telegram and push notification settings" />
@@ -104,18 +113,20 @@ export function AlertsSection({ cfg, set }) {
             <input
               className="field"
               placeholder="123456789:AAF..."
-              value={cfg.tgToken || ''}
-              onChange={e => set('tgToken', e.target.value)}
+              value={tgToken}
+              onChange={e => setTgToken(e.target.value)}
+              onBlur={() => set('tgToken', tgToken)}
               style={{ marginBottom: 10 }}
             />
             <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 5 }}>Chat ID:</div>
             <input
               className="field"
               placeholder="Your chat ID (use @userinfobot)"
-              value={cfg.tgChatId || ''}
-              onChange={e => set('tgChatId', e.target.value)}
+              value={tgChatId}
+              onChange={e => setTgChatId(e.target.value)}
+              onBlur={() => set('tgChatId', tgChatId)}
             />
-            <TgTestBtn token={cfg.tgToken} chatId={cfg.tgChatId} />
+            <TgTestBtn token={tgToken} chatId={tgChatId} onSave={() => { set('tgToken', tgToken); set('tgChatId', tgChatId) }} />
             <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>
               Get token from @BotFather · Get ID from @userinfobot
             </div>
