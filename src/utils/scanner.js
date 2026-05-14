@@ -26,6 +26,8 @@ export async function fetchCandles(symbol, interval = '15m', limit = 60) {
       attachEMAn(candles, 9,  'ema9')
       attachEMAn(candles, 20, 'ema20')
       attachEMAn(candles, 40, 'ema40')
+      attachEMAn(candles, 16, 'ema16')
+      attachEMAn(candles, 25, 'ema25')
       attachEMAn(candles, 50, 'ema50')
       attachEMAn(candles, 80, 'ema80')
       attachRSI(candles, 14)
