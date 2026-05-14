@@ -56,7 +56,7 @@ function Accordion({ title, icon, badge, defaultOpen=false, children, accentColo
 }
 
 // ── TF Chip Selector ──────────────────────────────────────
-// Inline multi-select for picking which timeframes a pattern runs on
+// Inline multi-select with checkbox-style chips — full clear allowed
 function TFChipSelector({ scannerId, selectedTfs, onChange, accentColor }) {
   const col = accentColor || 'var(--accent)'
 
@@ -64,13 +64,14 @@ function TFChipSelector({ scannerId, selectedTfs, onChange, accentColor }) {
     const next = selectedTfs.includes(tf)
       ? selectedTfs.filter(t => t !== tf)
       : [...selectedTfs, tf]
-    // Enforce: at least 1 TF must stay selected
-    if (next.length === 0) return
     onChange(next)
   }
 
   function selectAll() { onChange([...PATTERN_TF_LIST]) }
-  function clearAll()  { onChange([PATTERN_TF_LIST[0]]) } // keep minimum 1
+  function clearAll()  { onChange([]) }  // fully unchecks all
+
+  const allSelected = PATTERN_TF_LIST.every(tf => selectedTfs.includes(tf))
+  const noneSelected = selectedTfs.length === 0
 
   return (
     <div style={{
@@ -79,7 +80,7 @@ function TFChipSelector({ scannerId, selectedTfs, onChange, accentColor }) {
       background:'rgba(0,0,0,0.18)',
     }}>
       {/* Row label + bulk actions */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7, gap:6 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, gap:6 }}>
         <span style={{ fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'var(--text3)', letterSpacing:'.05em' }}>
           TIMEFRAMES
         </span>
@@ -88,63 +89,74 @@ function TFChipSelector({ scannerId, selectedTfs, onChange, accentColor }) {
             onClick={e => { e.stopPropagation(); selectAll() }}
             style={{
               fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
-              padding:'2px 7px', borderRadius:4, cursor:'pointer',
-              border:'1px solid rgba(0,230,118,0.4)',
-              background:'rgba(0,230,118,0.08)', color:'var(--green)',
+              padding:'2px 8px', borderRadius:4, cursor:'pointer',
+              border:`1px solid ${allSelected ? 'rgba(0,230,118,0.7)' : 'rgba(0,230,118,0.4)'}`,
+              background: allSelected ? 'rgba(0,230,118,0.18)' : 'rgba(0,230,118,0.07)',
+              color:'var(--green)', transition:'all .15s',
             }}>
-            All
+            ✓ Select All
           </button>
           <button
             onClick={e => { e.stopPropagation(); clearAll() }}
             style={{
               fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
-              padding:'2px 7px', borderRadius:4, cursor:'pointer',
-              border:'1px solid rgba(255,70,70,0.35)',
-              background:'rgba(255,70,70,0.07)', color:'var(--red)',
+              padding:'2px 8px', borderRadius:4, cursor:'pointer',
+              border:`1px solid ${noneSelected ? 'rgba(255,70,70,0.7)' : 'rgba(255,70,70,0.35)'}`,
+              background: noneSelected ? 'rgba(255,70,70,0.15)' : 'rgba(255,70,70,0.07)',
+              color:'var(--red)', transition:'all .15s',
             }}>
-            Clear
+            ✗ Clear All
           </button>
         </div>
       </div>
 
-      {/* TF chips */}
+      {/* Checkbox-style TF chips */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
         {PATTERN_TF_LIST.map(tf => {
-          const active = selectedTfs.includes(tf)
+          const checked = selectedTfs.includes(tf)
           const meta = TF_META[tf] || {}
-          const chipCol = active ? (meta.color || col) : 'var(--text3)'
+          const chipCol = checked ? (meta.color || col) : 'var(--text3)'
           return (
             <button
               key={tf}
               onClick={e => { e.stopPropagation(); toggle(tf) }}
               style={{
-                fontSize:10, fontFamily:'var(--mono)', fontWeight: active ? 800 : 500,
-                padding:'4px 9px', borderRadius:6, cursor:'pointer',
-                border:`1.5px solid ${active ? chipCol : 'var(--border)'}`,
-                background: active ? `${chipCol}22` : 'var(--bg2)',
-                color: active ? chipCol : 'var(--text3)',
+                display:'flex', alignItems:'center', gap:5,
+                fontSize:10, fontFamily:'var(--mono)', fontWeight: checked ? 800 : 500,
+                padding:'5px 9px', borderRadius:6, cursor:'pointer',
+                border:`1.5px solid ${checked ? chipCol : 'var(--border)'}`,
+                background: checked ? `${chipCol}20` : 'var(--bg2)',
+                color: checked ? chipCol : 'var(--text3)',
                 transition:'all .15s',
-                boxShadow: active ? `0 0 6px ${chipCol}44` : 'none',
-                minWidth:32, textAlign:'center',
+                boxShadow: checked ? `0 0 7px ${chipCol}44` : 'none',
               }}
             >
+              <span style={{
+                display:'inline-flex', alignItems:'center', justifyContent:'center',
+                width:12, height:12, borderRadius:3, flexShrink:0,
+                border:`1.5px solid ${checked ? chipCol : 'var(--border)'}`,
+                background: checked ? chipCol : 'transparent',
+                transition:'all .15s',
+              }}>
+                {checked && (
+                  <svg width="7" height="7" viewBox="0 0 8 8" fill="none">
+                    <polyline points="1,4 3.2,6.2 7,2" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
               {tf === '1d' ? 'Day' : tf}
             </button>
           )
         })}
       </div>
 
-      {/* Validation hint */}
-      {selectedTfs.length === 0 && (
-        <div style={{ fontSize:9, color:'var(--red)', fontFamily:'var(--mono)', marginTop:5 }}>
-          ⚠ Select at least one timeframe
-        </div>
-      )}
-      {selectedTfs.length > 0 && (
-        <div style={{ fontSize:9, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:5, opacity:.6 }}>
-          {selectedTfs.length} TF{selectedTfs.length > 1 ? 's' : ''} selected · scans only these
-        </div>
-      )}
+      <div style={{ fontSize:9, fontFamily:'var(--mono)', marginTop:6,
+        color: noneSelected ? 'var(--red)' : 'var(--text3)', opacity: noneSelected ? 1 : 0.6 }}>
+        {noneSelected
+          ? '⚠ No TF selected — pattern will not scan'
+          : `${selectedTfs.length} of ${PATTERN_TF_LIST.length} TFs selected · scans only these`
+        }
+      </div>
     </div>
   )
 }
@@ -346,9 +358,8 @@ function PatternManager({ settings, update }) {
   }
 
   function setPatternTfs(id, tfs) {
-    // Enforce at least 1 TF
-    const safe = tfs.length > 0 ? tfs : defaultTfsForScanner(ALL_SCANNERS.find(s=>s.id===id))
-    update({ patternTfs: { ...(settings.patternTfs || {}), [id]: safe } })
+    // Allow empty array — user can fully uncheck all TFs
+    update({ patternTfs: { ...(settings.patternTfs || {}), [id]: tfs } })
   }
 
   // ── Bulk TF actions ────────────────────────────────────
