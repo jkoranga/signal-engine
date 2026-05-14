@@ -25,15 +25,22 @@ export function getPatternTfs(patternTfs, scanner) {
 }
 
 // ── Accordion ─────────────────────────────────────────────
-function Accordion({ title, icon, badge, defaultOpen=false, children, accentColor, openKey }) {
+function Accordion({ title, icon, badge, defaultOpen=false, children, accentColor, openKey, forceOpenCount=0 }) {
   const [open, setOpen] = useState(defaultOpen)
   const prevKeyRef = React.useRef(openKey)
+  const prevForceRef = React.useRef(forceOpenCount)
   React.useEffect(() => {
     if (openKey !== prevKeyRef.current) {
       prevKeyRef.current = openKey
       setOpen(false)
     }
   }, [openKey])
+  React.useEffect(() => {
+    if (forceOpenCount !== prevForceRef.current) {
+      prevForceRef.current = forceOpenCount
+      setOpen(true)
+    }
+  }, [forceOpenCount])
   return (
     <div style={{
       border:`1.5px solid ${open&&accentColor?accentColor:'var(--border)'}`,
@@ -521,7 +528,7 @@ function PatternManager({ settings, update }) {
 }
 
 // ── Main SettingsTab ──────────────────────────────────────
-export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, openCount=0 }) {
+export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, openCount=0, patternsOpenCount=0 }) {
   const [resetMsg, setResetMsg] = React.useState('')
   const [resetConfirm, setResetConfirm] = React.useState(false)
   const openKey = openCount
@@ -556,7 +563,7 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
         <ScanSettingsSection settings={settings} update={update}/>
       </Accordion>
 
-      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)" openKey={openKey}>
+      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)" openKey={openKey} forceOpenCount={patternsOpenCount}>
         <PatternManager settings={settings} update={update}/>
       </Accordion>
 

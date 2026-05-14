@@ -480,9 +480,9 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
       {/* ── TF header ── */}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,gap:8 }}>
         <div>
-          <div style={{ display:'flex',alignItems:'center',gap:10 }}>
-            <div style={{ width:13,height:13,borderRadius:'50%',background:tabColor,boxShadow:`0 0 10px ${tabColor}` }}/>
-            <h2 style={{ fontSize:26,fontWeight:800,letterSpacing:'-.02em',color:tabColor }}>{timeframe.toUpperCase()}</h2>
+          <div style={{ display:'flex',alignItems:'center',gap:7 }}>
+            <div style={{ width:8,height:8,borderRadius:'50%',background:tabColor,boxShadow:`0 0 7px ${tabColor}` }}/>
+            <h2 style={{ fontSize:14,fontWeight:800,letterSpacing:'.04em',color:tabColor,fontFamily:'var(--mono)' }}>{timeframe.toUpperCase()}</h2>
           </div>
           <p style={{ fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:3 }}>
             {loadingSyms?'⟳ Loading…':`${symbols.length} symbols · ${activeScanners.length} patterns`}

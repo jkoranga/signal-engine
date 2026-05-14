@@ -267,6 +267,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
+  const [patternsOpenCount, setPatternsOpenCount] = useState(0)
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -306,6 +307,12 @@ export default function App() {
   function navigateTo(tab) {
     if (tab === 'settings') setSettingsOpenCount(c => c + 1)
     setActiveTab(tab)
+  }
+  // Navigate to Settings and directly open the Patterns accordion
+  function navigateToPatterns() {
+    setSettingsOpenCount(c => c + 1)
+    setPatternsOpenCount(c => c + 1)
+    setActiveTab('settings')
   }
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
@@ -361,15 +368,31 @@ export default function App() {
         </button>
 
         <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
-          {/* Active TF indicator pill */}
-          {activeTab !== 'settings' && activeTabCfg && (
-            <div style={{ display:'flex',alignItems:'center',gap:4,padding:'3px 9px',borderRadius:20,
-              background:`${activeTabCfg.color}14`,border:`1px solid ${activeTabCfg.color}44` }}>
-              <div style={{ width:5,height:5,borderRadius:'50%',background:activeTabCfg.color,
-                boxShadow:`0 0 6px ${activeTabCfg.color}`,animation:'pulse 2s infinite' }}/>
-              <span style={{ fontFamily:'var(--mono)',fontSize:10,fontWeight:700,color:activeTabCfg.color }}>{activeTab}</span>
-            </div>
-          )}
+          {/* Patterns button — jumps directly to Patterns accordion in Settings */}
+          <button
+            onClick={navigateToPatterns}
+            title="Patterns"
+            style={{
+              height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
+              border: activeTab==='settings' ? '1.5px solid rgba(150,100,255,0.7)' : '1.5px solid rgba(150,100,255,0.35)',
+              background: activeTab==='settings' ? 'rgba(150,100,255,0.13)' : 'rgba(150,100,255,0.07)',
+              display:'flex', alignItems:'center', gap:5,
+              cursor:'pointer', transition:'all .15s',
+              color: activeTab==='settings' ? '#b388ff' : 'rgba(150,100,255,0.7)',
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(150,100,255,0.7)';e.currentTarget.style.color='#b388ff'}}
+            onMouseLeave={e=>{
+              e.currentTarget.style.borderColor=activeTab==='settings'?'rgba(150,100,255,0.7)':'rgba(150,100,255,0.35)'
+              e.currentTarget.style.color=activeTab==='settings'?'#b388ff':'rgba(150,100,255,0.7)'
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>
+              <line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
+              <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="18" x2="16" y2="18"/>
+            </svg>
+            <span style={{fontSize:10,fontFamily:'var(--mono)',fontWeight:700,letterSpacing:'.04em'}}>PATTERNS</span>
+          </button>
 
           {/* Settings button — always visible in topbar */}
           <button
@@ -442,7 +465,7 @@ export default function App() {
           <ErrorBoundary>
             <SettingsTab settings={settings} set={set} update={update} reset={reset}
               user={user} onUserChange={setUser} cloudSynced={cloudSynced}
-              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} />
+              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} patternsOpenCount={patternsOpenCount} />
           </ErrorBoundary>
         )}
       </main>
