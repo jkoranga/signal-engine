@@ -666,8 +666,6 @@ export const ADVANCED_SCANNERS = [
     },
   },
 
-]
-
   // ─────────────────────────────────────────────────────────────────────────
   // Buy Signal 3M  —  Bull
   //
@@ -920,6 +918,7 @@ export const ADVANCED_SCANNERS = [
     },
   },
 
+]
 
 // Combined for convenience
 export const ALL_SCANNERS = [...SCANNERS, ...ADVANCED_SCANNERS]
