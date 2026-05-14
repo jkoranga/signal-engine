@@ -99,19 +99,62 @@ export function attachEMAn(candles, period, key) {
 }
 
 // ─── Fetch ALL tradable USDT pairs from Binance exchange info ─────────────────
+// Uses /api/v3/ticker/24hr as a secondary strategy (lighter payload)
+// Falls back to TOP_SYMBOLS only as last resort
 export async function fetchAllUSDTSymbols() {
+  // Strategy 1: exchangeInfo (full list, heavy ~2MB)
   for (const base of BASES) {
     try {
-      const res = await fetch(`${base}/api/v3/exchangeInfo`, { signal: AbortSignal.timeout(12000) })
+      const res = await fetch(`${base}/api/v3/exchangeInfo`, { signal: AbortSignal.timeout(15000) })
       if (!res.ok) continue
       const data = await res.json()
-      return data.symbols
-        .filter(s => s.status === 'TRADING' && s.quoteAsset === 'USDT' && !s.symbol.includes('DOWN') && !s.symbol.includes('UP') && !s.symbol.includes('BULL') && !s.symbol.includes('BEAR'))
+      const syms = data.symbols
+        .filter(s =>
+          s.status === 'TRADING' &&
+          s.quoteAsset === 'USDT' &&
+          !s.symbol.includes('DOWN') &&
+          !s.symbol.includes('UP') &&
+          !s.symbol.includes('BULL') &&
+          !s.symbol.includes('BEAR')
+        )
         .map(s => s.symbol)
         .sort()
-    } catch { /* next mirror */ }
+      if (syms.length > 50) return syms // success guard
+    } catch { /* try next mirror */ }
   }
-  return TOP_SYMBOLS // fallback
+
+  // Strategy 2: derive from 24h ticker (already fetched in parallel, lighter)
+  for (const base of BASES) {
+    try {
+      const res = await fetch(`${base}/api/v3/ticker/24hr`, { signal: AbortSignal.timeout(15000) })
+      if (!res.ok) continue
+      const data = await res.json()
+      const syms = data
+        .filter(t =>
+          t.symbol.endsWith('USDT') &&
+          !t.symbol.includes('DOWN') &&
+          !t.symbol.includes('UP') &&
+          !t.symbol.includes('BULL') &&
+          !t.symbol.includes('BEAR')
+        )
+        .map(t => t.symbol)
+        .sort()
+      if (syms.length > 50) return syms
+    } catch { /* try next mirror */ }
+  }
+
+  // Last resort — return null so callers know it truly failed (don't silently cap at 30)
+  return null
+}
+
+// Fetch ALL symbols with retry — returns [symbols, didFail]
+export async function fetchAllUSDTSymbolsWithRetry(retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await fetchAllUSDTSymbols()
+    if (result !== null) return [result, false]
+    if (attempt < retries) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+  }
+  return [TOP_SYMBOLS, true] // true = fallback used
 }
 
 // Fetch 24h ticker for all pairs (volume/price data)

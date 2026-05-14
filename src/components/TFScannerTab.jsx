@@ -3,7 +3,7 @@ import { CandleChart } from './UI.jsx'
 import { ADVANCED_SCANNERS, ALL_SCANNERS } from '../utils/scanners.js'
 import { getPatternTfs } from './SettingsTab.jsx'
 import {
-  fetchCandles, fetchAllUSDTSymbols, fetch24hTickers,
+  fetchCandles, fetchAllUSDTSymbolsWithRetry, fetch24hTickers,
   TOP_SYMBOLS, intervalToMs, playBeep,
   sendTelegram, buildTelegramMsg, fmt, timeSince, fmtVol,
 } from '../utils/scanner.js'
@@ -250,7 +250,8 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   const [selectedAlert, setSelectedAlert] = useState(null)
   const [allSymbols,    setAllSymbols]   = useState([])
   const [tickers,       setTickers]      = useState({})
-  const [loadingSyms,   setLoadingSyms]  = useState(false)
+  const [loadingSyms,   setLoadingSyms]  = useState(true)
+  const [symLoadFailed, setSymLoadFailed] = useState(false)
   const [singleSym,     setSingleSym]    = useState('')
   const [loopCount,     setLoopCount]    = useState(0)
 
@@ -268,28 +269,54 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   useEffect(() => { settingsRef.current = settings }, [settings])
   useEffect(() => { tickersRef.current  = tickers }, [tickers])
 
-  useEffect(() => {
+  // Load symbols + tickers — with retry and explicit failure tracking
+  const loadSymbols = useCallback(async () => {
     setLoadingSyms(true)
-    Promise.all([fetchAllUSDTSymbols(), fetch24hTickers()]).then(([syms, tkrs]) => {
-      setAllSymbols(syms); setTickers(tkrs); setLoadingSyms(false)
-    }).catch(() => { setAllSymbols(TOP_SYMBOLS); setLoadingSyms(false) })
+    setSymLoadFailed(false)
+    try {
+      const [[syms, failed], tkrs] = await Promise.all([
+        fetchAllUSDTSymbolsWithRetry(2),
+        fetch24hTickers(),
+      ])
+      setAllSymbols(syms)
+      setTickers(tkrs)
+      setSymLoadFailed(failed)
+    } catch {
+      setAllSymbols(TOP_SYMBOLS)
+      setSymLoadFailed(true)
+    } finally {
+      setLoadingSyms(false)
+    }
   }, [])
+
+  useEffect(() => { loadSymbols() }, [loadSymbols])
 
   const symbols = useMemo(() => {
     const extra = settings.customPairs || []
-    if (scanMode==='custom') return [...new Set(extra)]
-    const sorted = allSymbols.length>0
-      ? [...allSymbols].sort((a,b) => (tickers[b]?.volume||0) - (tickers[a]?.volume||0))
-      : [...TOP_SYMBOLS]
-    let base
+    if (scanMode === 'custom') return [...new Set(extra)]
+
     const symSet = settings.symbolSet
-    if (symSet==='top30')       base=sorted.slice(0,30)
-    else if (symSet==='top100') base=sorted.slice(0,100)
-    else if (symSet==='top200') base=sorted.slice(0,200)
-    else if (symSet==='top500') base=sorted.slice(0,500)
-    else                        base=sorted
+
+    // ── KEY FIX ──────────────────────────────────────────────────────────────
+    // While real symbols are still loading AND user wants more than top30,
+    // return empty so UI shows "Loading…" instead of wrong 30-pair count.
+    if (loadingSyms && symSet !== 'top30') return []
+
+    // Use real data if loaded; only fall back to TOP_SYMBOLS for top30 scenario
+    const source = allSymbols.length > 0 ? allSymbols : TOP_SYMBOLS
+    const sorted = [...source].sort(
+      (a, b) => (tickers[b]?.volume || 0) - (tickers[a]?.volume || 0)
+    )
+
+    let base
+    if      (symSet === 'top30')  base = sorted.slice(0, 30)
+    else if (symSet === 'top100') base = sorted.slice(0, 100)
+    else if (symSet === 'top200') base = sorted.slice(0, 200)
+    else if (symSet === 'top500') base = sorted.slice(0, 500)
+    else                          base = sorted  // 'all' — full 400+ list
+
     return [...new Set([...base, ...extra])]
-  }, [settings.symbolSet, settings.customPairs, allSymbols, tickers, scanMode])
+  }, [settings.symbolSet, settings.customPairs, allSymbols, tickers, scanMode, loadingSyms])
 
   useEffect(() => { symbolsRef.current = symbols }, [symbols])
 
@@ -484,8 +511,15 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
             <div style={{ width:8,height:8,borderRadius:'50%',background:tabColor,boxShadow:`0 0 7px ${tabColor}` }}/>
             <h2 style={{ fontSize:14,fontWeight:800,letterSpacing:'.04em',color:tabColor,fontFamily:'var(--mono)' }}>{timeframe.toUpperCase()}</h2>
           </div>
-          <p style={{ fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:3 }}>
-            {loadingSyms?'⟳ Loading…':`${symbols.length} symbols · ${activeScanners.length} patterns`}
+          <p style={{ fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:3, display:'flex', alignItems:'center', gap:6 }}>
+            {loadingSyms
+              ? <span style={{color:'var(--amber)'}}>⟳ Loading pairs…</span>
+              : symLoadFailed
+                ? <><span style={{color:'var(--red)'}}>⚠ API failed · {symbols.length} pairs</span>
+                    <button onClick={loadSymbols} style={{fontSize:10,padding:'1px 6px',borderRadius:4,border:'1px solid var(--red2)',background:'var(--red-dim)',color:'var(--red)',cursor:'pointer',fontFamily:'var(--mono)'}}>Retry</button>
+                  </>
+                : <span>{symbols.length} symbols · {activeScanners.length} patterns</span>
+            }
           </p>
         </div>
         <div style={{ display:'flex',gap:5,alignItems:'center',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end' }}>
