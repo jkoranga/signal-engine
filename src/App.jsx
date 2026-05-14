@@ -608,10 +608,9 @@ export default function App() {
             opacity:1,transition:'opacity .15s' }}
           onMouseEnter={e=>e.currentTarget.style.opacity='.7'}
           onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-          <LogoMark size={27} />
+          <LogoMark size={32} />
           <div style={{ textAlign:'left' }}>
-            <div style={{ fontWeight:800,fontSize:14,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.15 }}>Signal Engine</div>
-            <div style={{ fontFamily:'var(--mono)',fontSize:8,color:'var(--text3)',letterSpacing:'.08em' }}>BINANCE · {VERSION}</div>
+            <div style={{ fontWeight:800,fontSize:19,color:'var(--text)',letterSpacing:'-.02em',lineHeight:1.15 }}>Signal Engine</div>
           </div>
         </button>
 

@@ -311,7 +311,7 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 
 /* ── Topbar v2 ── */
 .topbar-v2 {
-  height: 46px;
+  height: 58px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   display: flex;
