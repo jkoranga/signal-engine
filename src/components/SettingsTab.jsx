@@ -15,10 +15,11 @@ function defaultTfsForScanner(scanner) {
   return scanner.tfs && scanner.tfs.length > 0 ? scanner.tfs : ['15m','1h']
 }
 
-// Resolve effective TF list for a scanner from saved patternTfs, with migration
+// Resolve effective TF list for a scanner from saved patternTfs, with migration.
+// [] (explicitly cleared) is respected as-is. Only fall back to default when key is absent.
 export function getPatternTfs(patternTfs, scanner) {
-  if (patternTfs && patternTfs[scanner.id] && patternTfs[scanner.id].length > 0) {
-    return patternTfs[scanner.id]
+  if (patternTfs && scanner.id in patternTfs) {
+    return patternTfs[scanner.id]  // may be [] — honour the explicit choice
   }
   return defaultTfsForScanner(scanner)
 }
@@ -346,9 +347,8 @@ function PatternManager({ settings, update }) {
     const saved = settings.patternTfs || {}
     const out = {}
     ALL_SCANNERS.forEach(s => {
-      out[s.id] = (saved[s.id] && saved[s.id].length > 0)
-        ? saved[s.id]
-        : defaultTfsForScanner(s)
+      // Use saved value when key exists (even if []), only default when key absent
+      out[s.id] = s.id in saved ? saved[s.id] : defaultTfsForScanner(s)
     })
     return out
   }, [settings.patternTfs])
@@ -374,7 +374,7 @@ function PatternManager({ settings, update }) {
     return ALL_SCANNERS.filter(s => {
       if (sideFilter !== 'all' && s.side !== sideFilter) return false
       if (tfFilter !== 'all') {
-        const tfs = patternTfs[s.id] || defaultTfsForScanner(s)
+        const tfs = (s.id in patternTfs) ? patternTfs[s.id] : defaultTfsForScanner(s)
         if (!tfs.includes(tfFilter)) return false
       }
       return true
@@ -387,7 +387,7 @@ function PatternManager({ settings, update }) {
   const allUsedTfs = useMemo(() => {
     const used = new Set()
     ALL_SCANNERS.forEach(s => {
-      const tfs = patternTfs[s.id] || defaultTfsForScanner(s)
+      const tfs = (s.id in patternTfs) ? patternTfs[s.id] : defaultTfsForScanner(s)
       tfs.forEach(tf => used.add(tf))
     })
     return TF_ORDER.filter(tf => used.has(tf) && PATTERN_TF_LIST.includes(tf))
@@ -511,7 +511,7 @@ function PatternManager({ settings, update }) {
             onTap={() => setExpanded(p => ({...p,[s.id]:!p[s.id]}))}
             enabled={scannerEnabled[s.id]}
             onToggle={v => setEnabled(s.id, v)}
-            selectedTfs={patternTfs[s.id] || defaultTfsForScanner(s)}
+            selectedTfs={(s.id in patternTfs) ? patternTfs[s.id] : defaultTfsForScanner(s)}
             onTfsChange={tfs => setPatternTfs(s.id, tfs)}
           />
         ))}
