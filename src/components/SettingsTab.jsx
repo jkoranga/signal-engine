@@ -10,9 +10,11 @@ import AccountSection from './sections/AccountSection.jsx'
 // ── All available TFs for pattern selection ───────────────
 const PATTERN_TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
 
-// Default TFs for a scanner — uses scanner.tfs if defined, else all
+// Default TFs for a scanner — uses scanner.tfs if defined, else ALL timeframes
 function defaultTfsForScanner(scanner) {
-  return scanner.tfs && scanner.tfs.length > 0 ? scanner.tfs : ['15m','1h']
+  return scanner.tfs && scanner.tfs.length > 0
+    ? scanner.tfs
+    : ['1m','3m','5m','15m','30m','1h','4h','1d']
 }
 
 // Resolve effective TF list for a scanner from saved patternTfs, with migration.

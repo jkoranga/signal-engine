@@ -325,9 +325,14 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     return ALL_SCANNERS.filter(s => {
       if (!scannerEnabled[s.id]) return false
       if (scanMode !== 'all' && scanMode !== 'single' && scanMode !== 'custom' && s.side !== scanMode) return false
-      // Only run this scanner on the current TF if it's in the pattern's selected TFs
-      const tfs = getPatternTfs(patternTfs, s)
-      return tfs.includes(timeframe)
+      // Only filter by TF if the user has explicitly saved a patternTfs config for this scanner.
+      // If not saved, run the scanner on ALL timeframes so results appear everywhere.
+      if (patternTfs && s.id in patternTfs) {
+        const tfs = patternTfs[s.id]
+        return tfs.length === 0 || tfs.includes(timeframe)
+      }
+      // No user override — run on all TFs by default
+      return true
     })
   }, [scannerEnabled, scanMode, settings.patternTfs, timeframe])
 
@@ -427,31 +432,48 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     if (loopRef.current) { setLoopCount(c=>c+1); setTimeout(()=>runScan(symOverride),300) }
   }, [timeframe]) // eslint-disable-line
 
-  // Initial scan — only for 15m (default tab), 3 seconds after page load
+  // ── Auto-scan: trigger 2s after mount for every TF tab ────────────────────
   const initialScanDone = useRef(false)
   useEffect(() => {
-    if (timeframe !== '15m') return
     if (initialScanDone.current) return
     initialScanDone.current = true
+    // Arm auto-mode immediately so the Scan button shows "Auto" state
+    setEnabled(true)
     const tryRun = () => {
-      if (symbolsRef.current.length > 0) {
+      if (symbolsRef.current.length > 0 && scannersRef.current.length > 0) {
         runScan()
       } else {
-        setTimeout(tryRun, 500)
+        setTimeout(tryRun, 400)
       }
     }
-    setTimeout(tryRun, 3000)
+    setTimeout(tryRun, 2000)
   }, []) // eslint-disable-line
+
+  // ── Auto-scan on tab activation: run immediately when user switches to this TF ─
+  const prevActiveRef = useRef(isActive)
+  useEffect(() => {
+    const wasActive = prevActiveRef.current
+    prevActiveRef.current = isActive
+    // Only react to becoming active (not on first render — handled above)
+    if (!isActive || wasActive) return
+    if (scanningRef.current) return
+    // Small delay so the tab transition renders first
+    const t = setTimeout(() => {
+      if (symbolsRef.current.length > 0 && scannersRef.current.length > 0 && !scanningRef.current) {
+        runScan()
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [isActive, runScan])
 
   // Auto-scan interval
   useEffect(() => {
     if (!enabled||loopMode) { clearInterval(timerRef.current); setNextScanAt(null); return }
     const ms = intervalToMs(settingsRef.current.scanInterval||'1m')
-    const boot = setTimeout(() => {
-      runScan(); setNextScanAt(Date.now()+ms)
-      timerRef.current = setInterval(() => { runScan(); setNextScanAt(Date.now()+ms) }, ms)
-    }, 5000)
-    return () => { clearTimeout(boot); clearInterval(timerRef.current); setNextScanAt(null) }
+    // First interval fires after ms (initial scan already happened at mount)
+    setNextScanAt(Date.now()+ms)
+    timerRef.current = setInterval(() => { runScan(); setNextScanAt(Date.now()+ms) }, ms)
+    return () => { clearInterval(timerRef.current); setNextScanAt(null) }
   }, [enabled, loopMode, settings.scanInterval]) // eslint-disable-line
 
   function toggleLoop(v) {
@@ -464,6 +486,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     loopRef.current=false; abortRef.current?.abort()
     setScanning(false); setEnabled(false); setLoopMode(false)
     setNextScanAt(null); clearInterval(timerRef.current)
+    scanningRef.current = false
   }
 
   function toggleSort(col) {
@@ -717,7 +740,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
               {scanMode==='single'?'Enter a symbol and tap Scan'
                 :scanning?`Scanning ${progressSym} (${progress}%)…`
                 :loopMode?`Loop #${loopCount}`
-                :enabled?'Waiting for next cycle…'
+                :enabled?'Auto-scan armed · waiting for next cycle…'
                 :'Tap Scan to start'}
             </div>
             <div style={{ fontSize:11,color:'var(--text3)',marginTop:6 }}>{activeScanners.length} patterns · {symbols.length} symbols · {timeframe}</div>
