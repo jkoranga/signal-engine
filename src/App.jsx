@@ -3,6 +3,8 @@ import { useSettings } from './hooks/useSettings.js'
 import TFScannerTab from './components/TFScannerTab.jsx'
 import SettingsTab from './components/SettingsTab.jsx'
 import { onAuthChanged, checkConfigured } from './firebase.js'
+import { ALL_SCANNERS, TF_META } from './utils/scanners.js'
+import { getPatternTfs } from './components/SettingsTab.jsx'
 
 const VERSION = 'v2.5'
 
@@ -259,6 +261,258 @@ function UserMenu({ user, onLogout, onGoToSettings }) {
   )
 }
 
+
+// ── Patterns Modal (bottom sheet) ─────────────────────────────────────────────
+const PATTERN_TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
+
+function defaultTfs(s) { return s.tfs && s.tfs.length > 0 ? s.tfs : ['15m','1h'] }
+
+function PatternsModal({ open, onClose, settings, update }) {
+  const [expanded, setExpanded] = React.useState({})
+  const [sideFilter, setSideFilter] = React.useState('all')
+
+  // Enabled
+  const scannerEnabled = React.useMemo(() => {
+    const saved = settings.scannerEnabled || {}
+    const m = {}
+    ALL_SCANNERS.forEach(s => { m[s.id] = s.id in saved ? saved[s.id] : true })
+    return m
+  }, [settings.scannerEnabled])
+
+  // Per-pattern TFs
+  const patternTfs = React.useMemo(() => {
+    const saved = settings.patternTfs || {}
+    const m = {}
+    ALL_SCANNERS.forEach(s => { m[s.id] = s.id in saved ? saved[s.id] : defaultTfs(s) })
+    return m
+  }, [settings.patternTfs])
+
+  function setEnabled(id, val) { update({ scannerEnabled: { ...scannerEnabled, [id]: val } }) }
+  function setTfs(id, tfs)     { update({ patternTfs: { ...(settings.patternTfs||{}), [id]: tfs } }) }
+
+  const visible = ALL_SCANNERS.filter(s => sideFilter === 'all' || s.side === sideFilter)
+  const enabledCount = visible.filter(s => scannerEnabled[s.id]).length
+
+  // Trap body scroll while open
+  React.useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:'fixed', inset:0, zIndex:999,
+        background:'rgba(0,0,0,0.6)',
+        backdropFilter:'blur(3px)',
+        display:'flex', flexDirection:'column', justifyContent:'flex-end',
+        animation:'fadeIn .18s ease',
+      }}
+    >
+      {/* Sheet */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background:'var(--bg1)',
+          borderRadius:'18px 18px 0 0',
+          border:'1.5px solid rgba(150,100,255,0.3)',
+          borderBottom:'none',
+          maxHeight:'88vh',
+          display:'flex', flexDirection:'column',
+          animation:'slideUp .22s cubic-bezier(.32,1.2,.5,1)',
+        }}
+      >
+        {/* Handle + header */}
+        <div style={{ padding:'12px 16px 10px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <div style={{ width:36,height:4,borderRadius:2,background:'var(--border2)',margin:'0 auto 12px' }}/>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:16 }}>🔬</span>
+              <div>
+                <div style={{ fontWeight:800, fontSize:15, letterSpacing:'-.01em' }}>Patterns</div>
+                <div style={{ fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginTop:1 }}>
+                  {enabledCount}/{visible.length} enabled · tap to configure TFs
+                </div>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:5, alignItems:'center' }}>
+              {/* Side filter */}
+              {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,lbl]) => (
+                <button key={id} onClick={() => setSideFilter(id)} style={{
+                  fontSize:10, fontFamily:'var(--mono)', fontWeight:700,
+                  padding:'4px 8px', borderRadius:6, cursor:'pointer',
+                  border:`1.5px solid ${sideFilter===id
+                    ? id==='bull' ? 'var(--green2)' : id==='bear' ? 'var(--red2)' : 'rgba(150,100,255,0.6)'
+                    : 'var(--border)'}`,
+                  background: sideFilter===id
+                    ? id==='bull' ? 'var(--green-dim)' : id==='bear' ? 'var(--red-dim)' : 'rgba(150,100,255,0.1)'
+                    : 'var(--bg2)',
+                  color: sideFilter===id
+                    ? id==='bull' ? 'var(--green)' : id==='bear' ? 'var(--red)' : '#b388ff'
+                    : 'var(--text3)',
+                }}>
+                  {lbl}
+                </button>
+              ))}
+              {/* Close */}
+              <button onClick={onClose} style={{
+                width:30, height:30, borderRadius:8, border:'1.5px solid var(--border)',
+                background:'var(--bg2)', cursor:'pointer', color:'var(--text3)',
+                display:'flex', alignItems:'center', justifyContent:'center', fontSize:16,
+              }}>×</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable pattern list */}
+        <div style={{ overflowY:'auto', padding:'10px 12px 24px', flex:1 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {visible.map(s => {
+              const isBull  = s.side === 'bull'
+              const col     = isBull ? 'var(--green)' : 'var(--red)'
+              const bd      = isBull ? 'rgba(0,200,100,0.45)' : 'rgba(255,60,80,0.45)'
+              const bg      = isBull ? 'rgba(0,230,118,0.06)' : 'rgba(255,60,80,0.06)'
+              const en      = scannerEnabled[s.id]
+              const tfs     = patternTfs[s.id] || defaultTfs(s)
+              const isExp   = !!expanded[s.id]
+
+              return (
+                <div key={s.id} style={{
+                  borderRadius:10,
+                  border:`1.5px solid ${en ? bd : 'var(--border)'}`,
+                  background: en ? bg : 'var(--bg2)',
+                  opacity: en ? 1 : 0.55,
+                  transition:'all .18s',
+                }}>
+                  {/* Card header */}
+                  <div
+                    onClick={() => setExpanded(p => ({...p,[s.id]:!p[s.id]}))}
+                    style={{ display:'flex', alignItems:'center', gap:9, padding:'10px 12px', cursor:'pointer' }}
+                  >
+                    <span style={{ fontSize:19, flexShrink:0 }}>{s.icon}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color: en ? col : 'var(--text2)' }}>{s.name}</div>
+                      {/* TF pills */}
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:3, marginTop:3 }}>
+                        {tfs.length > 0 ? tfs.map(tf => {
+                          const tfCol = en ? (TF_META[tf]?.color || col) : 'var(--text3)'
+                          return (
+                            <span key={tf} style={{
+                              fontSize:8, fontFamily:'var(--mono)', fontWeight:700,
+                              padding:'1px 5px', borderRadius:4,
+                              background: en ? `${tfCol}18` : 'var(--bg3)',
+                              color: en ? tfCol : 'var(--text3)',
+                              border:`1px solid ${en ? tfCol+'44' : 'var(--border)'}`,
+                            }}>{tf === '1d' ? 'Day' : tf}</span>
+                          )
+                        }) : <span style={{fontSize:8,fontFamily:'var(--mono)',color:'var(--red)',fontWeight:700}}>⚠ No TF</span>}
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:7, flexShrink:0 }} onClick={e=>e.stopPropagation()}>
+                      {/* Toggle */}
+                      <div
+                        onClick={() => setEnabled(s.id, !en)}
+                        style={{
+                          width:36, height:20, borderRadius:10, cursor:'pointer',
+                          background: en ? 'var(--green)' : 'var(--bg3)',
+                          border:`1.5px solid ${en ? 'var(--green)' : 'var(--border)'}`,
+                          position:'relative', transition:'all .2s', flexShrink:0,
+                        }}
+                      >
+                        <div style={{
+                          position:'absolute', top:2, left: en ? 17 : 2,
+                          width:12, height:12, borderRadius:'50%',
+                          background:'#fff', transition:'left .2s',
+                          boxShadow:'0 1px 3px rgba(0,0,0,0.3)',
+                        }}/>
+                      </div>
+                    </div>
+                    <span style={{ color:'var(--text3)', fontSize:11, flexShrink:0 }}>{isExp ? '▲' : '▼'}</span>
+                  </div>
+
+                  {/* Expanded: TF selector + conditions */}
+                  {isExp && (
+                    <>
+                      {/* TF chip selector */}
+                      <div style={{ padding:'10px 12px 12px', borderTop:'1px solid var(--border)', background:'rgba(0,0,0,0.15)' }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7 }}>
+                          <span style={{ fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'var(--text3)', letterSpacing:'.05em' }}>TIMEFRAMES</span>
+                          <div style={{ display:'flex', gap:4 }}>
+                            <button onClick={() => setTfs(s.id, [...PATTERN_TF_LIST])} style={{
+                              fontSize:9, fontFamily:'var(--mono)', fontWeight:700, padding:'2px 7px', borderRadius:4, cursor:'pointer',
+                              border:'1px solid rgba(0,230,118,0.4)', background:'rgba(0,230,118,0.08)', color:'var(--green)',
+                            }}>✓ All</button>
+                            <button onClick={() => setTfs(s.id, [])} style={{
+                              fontSize:9, fontFamily:'var(--mono)', fontWeight:700, padding:'2px 7px', borderRadius:4, cursor:'pointer',
+                              border:'1px solid rgba(255,70,70,0.35)', background:'rgba(255,70,70,0.07)', color:'var(--red)',
+                            }}>✗ Clear</button>
+                          </div>
+                        </div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                          {PATTERN_TF_LIST.map(tf => {
+                            const checked  = tfs.includes(tf)
+                            const tfMeta   = TF_META[tf] || {}
+                            const chipCol  = checked ? (tfMeta.color || col) : 'var(--text3)'
+                            return (
+                              <button key={tf} onClick={() => {
+                                const next = checked ? tfs.filter(t=>t!==tf) : [...tfs, tf]
+                                setTfs(s.id, next)
+                              }} style={{
+                                display:'flex', alignItems:'center', gap:5,
+                                fontSize:10, fontFamily:'var(--mono)', fontWeight: checked?800:500,
+                                padding:'5px 9px', borderRadius:6, cursor:'pointer',
+                                border:`1.5px solid ${checked ? chipCol : 'var(--border)'}`,
+                                background: checked ? `${chipCol}20` : 'var(--bg2)',
+                                color: checked ? chipCol : 'var(--text3)',
+                                transition:'all .15s',
+                                boxShadow: checked ? `0 0 7px ${chipCol}44` : 'none',
+                              }}>
+                                {/* Checkbox */}
+                                <span style={{
+                                  display:'inline-flex', alignItems:'center', justifyContent:'center',
+                                  width:12, height:12, borderRadius:3, flexShrink:0,
+                                  border:`1.5px solid ${checked ? chipCol : 'var(--border)'}`,
+                                  background: checked ? chipCol : 'transparent', transition:'all .15s',
+                                }}>
+                                  {checked && <svg width="7" height="7" viewBox="0 0 8 8" fill="none">
+                                    <polyline points="1,4 3.2,6.2 7,2" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>}
+                                </span>
+                                {tf === '1d' ? 'Day' : tf}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div style={{ fontSize:9, fontFamily:'var(--mono)', marginTop:6,
+                          color: tfs.length===0 ? 'var(--red)' : 'var(--text3)', opacity: tfs.length===0 ? 1 : 0.6 }}>
+                          {tfs.length === 0 ? '⚠ No TF — pattern will not scan' : `${tfs.length} of ${PATTERN_TF_LIST.length} TFs · scans only these`}
+                        </div>
+                      </div>
+                      {/* Conditions */}
+                      <div style={{ padding:'10px 12px', borderTop:`1px solid ${bd}`, background:'rgba(0,0,0,0.1)' }}>
+                        <div style={{ fontSize:9, fontFamily:'var(--mono)', color:'var(--text3)', fontWeight:700, letterSpacing:'.05em', marginBottom:5 }}>CONDITIONS</div>
+                        {s.conditions.map((cond,i) => (
+                          <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:7, padding:'3px 0' }}>
+                            <span style={{ color:col, fontSize:10, marginTop:2, flexShrink:0 }}>◆</span>
+                            <span style={{ fontSize:11, color:'var(--text2)', lineHeight:1.5 }}>{cond}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [activeTab,      setActiveTab]      = useState('15m')
   const [user,           setUser]           = useState(null)
@@ -267,7 +521,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
-  const [patternsOpenCount, setPatternsOpenCount] = useState(0)
+  const [showPatterns, setShowPatterns] = useState(false)
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -307,12 +561,6 @@ export default function App() {
   function navigateTo(tab) {
     if (tab === 'settings') setSettingsOpenCount(c => c + 1)
     setActiveTab(tab)
-  }
-  // Navigate to Settings and directly open the Patterns accordion
-  function navigateToPatterns() {
-    setSettingsOpenCount(c => c + 1)
-    setPatternsOpenCount(c => c + 1)
-    setActiveTab('settings')
   }
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
@@ -370,7 +618,7 @@ export default function App() {
         <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
           {/* Patterns button — jumps directly to Patterns accordion in Settings */}
           <button
-            onClick={navigateToPatterns}
+            onClick={() => setShowPatterns(true)}
             title="Patterns"
             style={{
               height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
@@ -465,7 +713,7 @@ export default function App() {
           <ErrorBoundary>
             <SettingsTab settings={settings} set={set} update={update} reset={reset}
               user={user} onUserChange={setUser} cloudSynced={cloudSynced}
-              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} patternsOpenCount={patternsOpenCount} />
+              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} />
           </ErrorBoundary>
         )}
       </main>
@@ -497,6 +745,14 @@ export default function App() {
           )
         })}
       </nav>
+
+      {/* Patterns bottom sheet modal */}
+      <PatternsModal
+        open={showPatterns}
+        onClose={() => setShowPatterns(false)}
+        settings={settings}
+        update={update}
+      />
     </div>
   )
 }
