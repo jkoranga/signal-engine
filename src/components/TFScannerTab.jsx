@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { CandleChart } from './UI.jsx'
 import { ADVANCED_SCANNERS, ALL_SCANNERS } from '../utils/scanners.js'
+import { getPatternTfs } from './SettingsTab.jsx'
 import {
   fetchCandles, fetchAllUSDTSymbols, fetch24hTickers,
   TOP_SYMBOLS, intervalToMs, playBeep,
@@ -293,8 +294,15 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   useEffect(() => { symbolsRef.current = symbols }, [symbols])
 
   const activeScanners = useMemo(() => {
-    return ALL_SCANNERS.filter(s => scannerEnabled[s.id] && (scanMode==='all'||scanMode==='single'||scanMode==='custom'||s.side===scanMode))
-  }, [scannerEnabled, scanMode])
+    const patternTfs = settings.patternTfs || {}
+    return ALL_SCANNERS.filter(s => {
+      if (!scannerEnabled[s.id]) return false
+      if (scanMode !== 'all' && scanMode !== 'single' && scanMode !== 'custom' && s.side !== scanMode) return false
+      // Only run this scanner on the current TF if it's in the pattern's selected TFs
+      const tfs = getPatternTfs(patternTfs, s)
+      return tfs.includes(timeframe)
+    })
+  }, [scannerEnabled, scanMode, settings.patternTfs, timeframe])
 
   useEffect(() => { scannersRef.current = activeScanners }, [activeScanners])
 

@@ -7,10 +7,25 @@ import { SignalStrengthSection } from './sections/FilterSections.jsx'
 import CustomPairsSection from './sections/CustomPairsSection.jsx'
 import AccountSection from './sections/AccountSection.jsx'
 
+// ── All available TFs for pattern selection ───────────────
+const PATTERN_TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
+
+// Default TFs for a scanner — uses scanner.tfs if defined, else all
+function defaultTfsForScanner(scanner) {
+  return scanner.tfs && scanner.tfs.length > 0 ? scanner.tfs : ['15m','1h']
+}
+
+// Resolve effective TF list for a scanner from saved patternTfs, with migration
+export function getPatternTfs(patternTfs, scanner) {
+  if (patternTfs && patternTfs[scanner.id] && patternTfs[scanner.id].length > 0) {
+    return patternTfs[scanner.id]
+  }
+  return defaultTfsForScanner(scanner)
+}
+
 // ── Accordion ─────────────────────────────────────────────
 function Accordion({ title, icon, badge, defaultOpen=false, children, accentColor, openKey }) {
   const [open, setOpen] = useState(defaultOpen)
-  // Close whenever openKey changes (i.e. settings tab is re-opened)
   const prevKeyRef = React.useRef(openKey)
   React.useEffect(() => {
     if (openKey !== prevKeyRef.current) {
@@ -40,34 +55,143 @@ function Accordion({ title, icon, badge, defaultOpen=false, children, accentColo
   )
 }
 
+// ── TF Chip Selector ──────────────────────────────────────
+// Inline multi-select for picking which timeframes a pattern runs on
+function TFChipSelector({ scannerId, selectedTfs, onChange, accentColor }) {
+  const col = accentColor || 'var(--accent)'
+
+  function toggle(tf) {
+    const next = selectedTfs.includes(tf)
+      ? selectedTfs.filter(t => t !== tf)
+      : [...selectedTfs, tf]
+    // Enforce: at least 1 TF must stay selected
+    if (next.length === 0) return
+    onChange(next)
+  }
+
+  function selectAll() { onChange([...PATTERN_TF_LIST]) }
+  function clearAll()  { onChange([PATTERN_TF_LIST[0]]) } // keep minimum 1
+
+  return (
+    <div style={{
+      padding:'10px 13px 12px',
+      borderTop:'1px solid var(--border)',
+      background:'rgba(0,0,0,0.18)',
+    }}>
+      {/* Row label + bulk actions */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:7, gap:6 }}>
+        <span style={{ fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'var(--text3)', letterSpacing:'.05em' }}>
+          TIMEFRAMES
+        </span>
+        <div style={{ display:'flex', gap:4 }}>
+          <button
+            onClick={e => { e.stopPropagation(); selectAll() }}
+            style={{
+              fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
+              padding:'2px 7px', borderRadius:4, cursor:'pointer',
+              border:'1px solid rgba(0,230,118,0.4)',
+              background:'rgba(0,230,118,0.08)', color:'var(--green)',
+            }}>
+            All
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); clearAll() }}
+            style={{
+              fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
+              padding:'2px 7px', borderRadius:4, cursor:'pointer',
+              border:'1px solid rgba(255,70,70,0.35)',
+              background:'rgba(255,70,70,0.07)', color:'var(--red)',
+            }}>
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {/* TF chips */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+        {PATTERN_TF_LIST.map(tf => {
+          const active = selectedTfs.includes(tf)
+          const meta = TF_META[tf] || {}
+          const chipCol = active ? (meta.color || col) : 'var(--text3)'
+          return (
+            <button
+              key={tf}
+              onClick={e => { e.stopPropagation(); toggle(tf) }}
+              style={{
+                fontSize:10, fontFamily:'var(--mono)', fontWeight: active ? 800 : 500,
+                padding:'4px 9px', borderRadius:6, cursor:'pointer',
+                border:`1.5px solid ${active ? chipCol : 'var(--border)'}`,
+                background: active ? `${chipCol}22` : 'var(--bg2)',
+                color: active ? chipCol : 'var(--text3)',
+                transition:'all .15s',
+                boxShadow: active ? `0 0 6px ${chipCol}44` : 'none',
+                minWidth:32, textAlign:'center',
+              }}
+            >
+              {tf === '1d' ? 'Day' : tf}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Validation hint */}
+      {selectedTfs.length === 0 && (
+        <div style={{ fontSize:9, color:'var(--red)', fontFamily:'var(--mono)', marginTop:5 }}>
+          ⚠ Select at least one timeframe
+        </div>
+      )}
+      {selectedTfs.length > 0 && (
+        <div style={{ fontSize:9, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:5, opacity:.6 }}>
+          {selectedTfs.length} TF{selectedTfs.length > 1 ? 's' : ''} selected · scans only these
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Scanner def card ──────────────────────────────────────
-function ScannerDefCard({ scanner, expanded, onTap, enabled, onToggle }) {
+function ScannerDefCard({ scanner, expanded, onTap, enabled, onToggle, selectedTfs, onTfsChange }) {
   const isBull = scanner.side==='bull'
   const col = isBull?'var(--green)':'var(--red)'
   const bd  = isBull?'rgba(0,200,100,0.5)':'rgba(255,60,80,0.5)'
   const bg  = isBull?'rgba(0,230,118,0.07)':'rgba(255,60,80,0.07)'
   const isAdv = scanner.group==='advanced'
+
   return (
     <div style={{
       borderRadius:10, border:`1.5px solid ${enabled?bd:'var(--border)'}`,
       background:enabled?bg:'var(--bg2)', opacity:enabled?1:0.55, transition:'all .18s', flexShrink:0,
     }}>
+      {/* Header row */}
       <div style={{display:'flex',alignItems:'center',gap:10,padding:'11px 13px',cursor:'pointer',minHeight:54}} onClick={onTap}>
         <span style={{fontSize:20,flexShrink:0}}>{scanner.icon}</span>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2,flexWrap:'wrap'}}>
             <div style={{fontWeight:700,fontSize:13,color:enabled?col:'var(--text2)',letterSpacing:'-.01em'}}>{scanner.name}</div>
-            {scanner.tfs && scanner.tfs.map(tf => (
-              <span key={tf} style={{
-                fontSize:9, fontFamily:'var(--mono)', fontWeight:700,
-                padding:'1px 5px', borderRadius:4,
-                background: enabled ? `${col}18` : 'var(--bg3)',
-                color: enabled ? col : 'var(--text3)',
-                border: `1px solid ${enabled ? col+'44' : 'var(--border)'}`,
-              }}>{tf}</span>
-            ))}
+            {isAdv&&<span style={{fontSize:8,fontFamily:'var(--mono)',fontWeight:800,padding:'1px 5px',borderRadius:4,
+              background:'rgba(150,100,255,0.15)',color:'#b388ff',border:'1px solid rgba(150,100,255,0.3)',flexShrink:0}}>ADV</span>}
           </div>
-          <div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:1.4}}>{scanner.sub}</div>
+          {/* Selected TF pills — compact display */}
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:2}}>
+            {selectedTfs.length > 0 ? selectedTfs.map(tf => {
+              const meta = TF_META[tf] || {}
+              const tfCol = enabled ? (meta.color || col) : 'var(--text3)'
+              return (
+                <span key={tf} style={{
+                  fontSize:8, fontFamily:'var(--mono)', fontWeight:700,
+                  padding:'1px 5px', borderRadius:4,
+                  background: enabled ? `${tfCol}18` : 'var(--bg3)',
+                  color: enabled ? tfCol : 'var(--text3)',
+                  border:`1px solid ${enabled ? tfCol+'44' : 'var(--border)'}`,
+                }}>
+                  {tf === '1d' ? 'Day' : tf}
+                </span>
+              )
+            }) : (
+              <span style={{fontSize:8,fontFamily:'var(--mono)',color:'var(--red)',fontWeight:700}}>⚠ No TF</span>
+            )}
+          </div>
+          <div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',lineHeight:1.4,marginTop:2}}>{scanner.sub}</div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:7,flexShrink:0}} onClick={e=>e.stopPropagation()}>
           <span className={`badge ${isBull?'badge-green':'badge-red'}`} style={{fontSize:9}}>{scanner.badge}</span>
@@ -75,15 +199,28 @@ function ScannerDefCard({ scanner, expanded, onTap, enabled, onToggle }) {
         </div>
         <span style={{color:'var(--text3)',fontSize:11,flexShrink:0}}>{expanded?'▲':'▼'}</span>
       </div>
-      {expanded&&(
-        <div style={{borderTop:`1px solid ${bd}`,background:'rgba(0,0,0,0.18)',padding:'10px 14px'}}>
-          {scanner.conditions.map((cond,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'4px 0'}}>
-              <span style={{color:col,fontSize:11,marginTop:2,flexShrink:0}}>◆</span>
-              <span style={{fontSize:11,color:'var(--text2)',lineHeight:1.5}}>{cond}</span>
-            </div>
-          ))}
-        </div>
+
+      {/* Expanded panel: TF selector + conditions */}
+      {expanded && (
+        <>
+          {/* TF chip selector */}
+          <TFChipSelector
+            scannerId={scanner.id}
+            selectedTfs={selectedTfs}
+            onChange={onTfsChange}
+            accentColor={col}
+          />
+          {/* Conditions */}
+          <div style={{borderTop:`1px solid ${bd}`,background:'rgba(0,0,0,0.12)',padding:'10px 14px'}}>
+            <div style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--text3)',fontWeight:700,letterSpacing:'.05em',marginBottom:6}}>CONDITIONS</div>
+            {scanner.conditions.map((cond,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'4px 0'}}>
+                <span style={{color:col,fontSize:11,marginTop:2,flexShrink:0}}>◆</span>
+                <span style={{fontSize:11,color:'var(--text2)',lineHeight:1.5}}>{cond}</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -175,164 +312,197 @@ function ScanSettingsSection({ settings, update }) {
   )
 }
 
-// ── Pattern Manager with TF tabs ─────────────────────────────────────────────
-// TF tabs are derived dynamically from scanner tfs[] fields — no need to edit
-// this file when adding new patterns. Just add tfs:['Xm'] to the scanner def.
-const GLOBAL_TAB = { id: 'global', label: 'All TF', color: '#00b8d9', desc: 'Default for all scanners' }
-
+// ── Pattern Manager ───────────────────────────────────────
+// Each pattern shows: enabled toggle + inline TF chip selector + conditions
 function PatternManager({ settings, update }) {
   const [expanded, setExpanded] = useState({})
-
-  // Build TF tabs from whatever TFs scanners actually declare — auto-expands
-  const TF_PATTERN_TABS = useMemo(() => {
-    const used = new Set(ALL_SCANNERS.flatMap(s => s.tfs ?? []))
-    const tfTabs = TF_ORDER
-      .filter(tf => used.has(tf))
-      .map(tf => TF_META[tf])
-      .filter(Boolean)
-    return [GLOBAL_TAB, ...tfTabs]
-  }, [])
   const [sideFilter, setSideFilter] = useState('all')
-  const [activeTF, setActiveTF] = useState('global')
+  const [tfFilter, setTfFilter] = useState('all') // filter list by TF
 
-  const activeTFCfg = TF_PATTERN_TABS.find(t => t.id === activeTF)
-
-  const scannerEnabled = (() => {
+  // ── Enabled state ──────────────────────────────────────
+  const scannerEnabled = useMemo(() => {
     const saved = settings.scannerEnabled || {}
     const merged = {}
     ALL_SCANNERS.forEach(s => { merged[s.id] = s.id in saved ? saved[s.id] : true })
     return merged
-  })()
+  }, [settings.scannerEnabled])
 
-  const tfPatterns = settings.tfPatterns || {}
-
-  function getEnabledForTF(tf) {
-    if (tf === 'global') return scannerEnabled
-    const overrides = tfPatterns[tf] || {}
-    const merged = {}
+  // ── Per-pattern TF selections ──────────────────────────
+  // patternTfs: { [scannerId]: string[] }
+  // Migration: if not saved, seed from scanner.tfs defaults
+  const patternTfs = useMemo(() => {
+    const saved = settings.patternTfs || {}
+    const out = {}
     ALL_SCANNERS.forEach(s => {
-      merged[s.id] = s.id in overrides ? overrides[s.id] : (scannerEnabled[s.id] !== false)
+      out[s.id] = (saved[s.id] && saved[s.id].length > 0)
+        ? saved[s.id]
+        : defaultTfsForScanner(s)
     })
-    return merged
+    return out
+  }, [settings.patternTfs])
+
+  function setEnabled(id, val) {
+    update({ scannerEnabled: { ...scannerEnabled, [id]: val } })
   }
 
-  function setTFEnabled(tf, fn) {
-    if (tf === 'global') {
-      const next = typeof fn === 'function' ? fn(scannerEnabled) : fn
-      update({ scannerEnabled: next })
-    } else {
-      const current = getEnabledForTF(tf)
-      const next = typeof fn === 'function' ? fn(current) : fn
-      update({ tfPatterns: { ...tfPatterns, [tf]: next } })
-    }
+  function setPatternTfs(id, tfs) {
+    // Enforce at least 1 TF
+    const safe = tfs.length > 0 ? tfs : defaultTfsForScanner(ALL_SCANNERS.find(s=>s.id===id))
+    update({ patternTfs: { ...(settings.patternTfs || {}), [id]: safe } })
   }
 
-  const enabledMap = getEnabledForTF(activeTF)
+  // ── Bulk TF actions ────────────────────────────────────
+  function bulkSetTfs(tfs) {
+    const patch = {}
+    ALL_SCANNERS.forEach(s => { patch[s.id] = tfs })
+    update({ patternTfs: { ...(settings.patternTfs || {}), ...patch } })
+  }
 
-  // On a specific TF tab, only show scanners that declare that TF (or all on global)
-  const visible = ALL_SCANNERS.filter(s => {
-    if (sideFilter !== 'all' && s.side !== sideFilter) return false
-    if (activeTF !== 'global' && s.tfs && !s.tfs.includes(activeTF)) return false
-    return true
-  })
-  const enabledCount = visible.filter(s => enabledMap[s.id]).length
+  // ── Visible scanners ───────────────────────────────────
+  const visible = useMemo(() => {
+    return ALL_SCANNERS.filter(s => {
+      if (sideFilter !== 'all' && s.side !== sideFilter) return false
+      if (tfFilter !== 'all') {
+        const tfs = patternTfs[s.id] || defaultTfsForScanner(s)
+        if (!tfs.includes(tfFilter)) return false
+      }
+      return true
+    })
+  }, [sideFilter, tfFilter, patternTfs])
+
+  const enabledCount = visible.filter(s => scannerEnabled[s.id]).length
+
+  // Available TFs for filter tabs — union of all assigned TFs
+  const allUsedTfs = useMemo(() => {
+    const used = new Set()
+    ALL_SCANNERS.forEach(s => {
+      const tfs = patternTfs[s.id] || defaultTfsForScanner(s)
+      tfs.forEach(tf => used.add(tf))
+    })
+    return TF_ORDER.filter(tf => used.has(tf) && PATTERN_TF_LIST.includes(tf))
+  }, [patternTfs])
 
   return (
     <div>
-      {/* TF selector tabs */}
-      <div style={{ overflowX:'auto', marginBottom:12, paddingBottom:2 }}>
-        <div style={{ display:'flex', gap:4, minWidth:'max-content' }}>
-          {TF_PATTERN_TABS.map(tf => {
-            const isActive = activeTF === tf.id
-            const hasOverride = tf.id !== 'global' && !!tfPatterns[tf.id]
+      {/* Info banner */}
+      <div style={{
+        background:'rgba(150,100,255,0.07)', border:'1px solid rgba(150,100,255,0.22)',
+        borderRadius:8, padding:'8px 11px', marginBottom:12,
+        display:'flex', alignItems:'flex-start', gap:8,
+      }}>
+        <span style={{fontSize:14,flexShrink:0,marginTop:1}}>⚡</span>
+        <div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'#b388ff',fontWeight:700,marginBottom:2}}>
+            Per-Pattern Timeframe Control
+          </div>
+          <div style={{fontSize:10,color:'var(--text3)',lineHeight:1.5}}>
+            Each pattern scans <b style={{color:'var(--text2)'}}>only its selected TFs</b>.
+            Expand a pattern to choose which timeframes it runs on.
+          </div>
+        </div>
+      </div>
+
+      {/* Bulk actions row */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+          {/* Enable/disable bulk */}
+          <button className="btn-small"
+            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=true); update({ scannerEnabled: n }) }}
+            style={{background:'rgba(0,230,118,0.12)',borderColor:'rgba(0,192,96,0.5)',color:'var(--green)',fontWeight:700}}>
+            ✓ All On
+          </button>
+          <button className="btn-small"
+            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=false); update({ scannerEnabled: n }) }}
+            style={{background:'rgba(255,70,70,0.08)',borderColor:'rgba(255,70,70,0.35)',color:'var(--red)',fontWeight:700}}>
+            ✗ All Off
+          </button>
+          {/* Bulk TF set */}
+          <button className="btn-small"
+            onClick={() => bulkSetTfs([...PATTERN_TF_LIST])}
+            style={{background:'rgba(0,184,217,0.08)',borderColor:'rgba(0,184,217,0.35)',color:'var(--accent)',fontWeight:700}}>
+            TF: All
+          </button>
+          <button className="btn-small"
+            onClick={() => bulkSetTfs(['15m','1h'])}
+            style={{background:'rgba(105,219,124,0.08)',borderColor:'rgba(105,219,124,0.35)',color:'#69db7c',fontWeight:700}}>
+            TF: Default
+          </button>
+        </div>
+        {/* Side filter */}
+        <div style={{ display:'flex', gap:4 }}>
+          {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,lbl])=>(
+            <button key={id} className="btn-small" onClick={() => setSideFilter(id)}
+              style={sideFilter===id?{
+                borderColor:id==='bull'?'var(--green2)':id==='bear'?'var(--red2)':'var(--border2)',
+                color:id==='bull'?'var(--green)':id==='bear'?'var(--red)':'var(--text)',
+                background:id==='bull'?'var(--green-dim)':id==='bear'?'var(--red-dim)':'var(--bg3)',
+                fontWeight:700
+              }:{}}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* TF filter chips — filter which patterns are shown by their assigned TF */}
+      <div style={{ marginBottom:10 }}>
+        <div style={{ fontSize:9, fontFamily:'var(--mono)', color:'var(--text3)', fontWeight:700, letterSpacing:'.05em', marginBottom:5 }}>
+          FILTER BY TF
+        </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+          <button
+            onClick={() => setTfFilter('all')}
+            style={{
+              fontSize:10, fontFamily:'var(--mono)', fontWeight: tfFilter==='all'?800:500,
+              padding:'4px 9px', borderRadius:6, cursor:'pointer',
+              border:`1.5px solid ${tfFilter==='all'?'var(--accent)':'var(--border)'}`,
+              background: tfFilter==='all'?'var(--accent-dim)':'var(--bg2)',
+              color: tfFilter==='all'?'var(--accent)':'var(--text3)',
+              transition:'all .15s',
+            }}>
+            All
+          </button>
+          {allUsedTfs.map(tf => {
+            const meta = TF_META[tf] || {}
+            const isActive = tfFilter === tf
             return (
-              <button key={tf.id} onClick={() => setActiveTF(tf.id)}
+              <button key={tf} onClick={() => setTfFilter(isActive ? 'all' : tf)}
                 style={{
-                  padding:'5px 11px', borderRadius:8, fontSize:11, fontWeight:700,
-                  fontFamily:'var(--mono)', cursor:'pointer', position:'relative',
-                  border:`1.5px solid ${isActive ? tf.color : 'var(--border)'}`,
-                  background:isActive ? `${tf.color}18` : 'var(--bg2)',
-                  color:isActive ? tf.color : 'var(--text3)',
-                  transition:'all .15s', flexShrink:0,
+                  fontSize:10, fontFamily:'var(--mono)', fontWeight: isActive?800:500,
+                  padding:'4px 9px', borderRadius:6, cursor:'pointer',
+                  border:`1.5px solid ${isActive ? meta.color||'var(--accent)' : 'var(--border)'}`,
+                  background: isActive ? `${meta.color||'var(--accent)'}18` : 'var(--bg2)',
+                  color: isActive ? meta.color||'var(--accent)' : 'var(--text3)',
+                  transition:'all .15s',
                 }}>
-                {tf.label}
-                {hasOverride && (
-                  <span style={{
-                    position:'absolute', top:-4, right:-4, width:7, height:7,
-                    borderRadius:'50%', background:tf.color,
-                  }}/>
-                )}
+                {tf === '1d' ? 'Day' : tf}
               </button>
             )
           })}
         </div>
       </div>
 
-      {/* Active TF description */}
-      <div style={{
-        background:`${activeTFCfg.color}0f`, border:`1px solid ${activeTFCfg.color}30`,
-        borderRadius:8, padding:'8px 11px', marginBottom:11,
-        display:'flex', alignItems:'center', gap:8,
-      }}>
-        <div style={{ width:7, height:7, borderRadius:'50%', background:activeTFCfg.color, flexShrink:0,
-          boxShadow:`0 0 6px ${activeTFCfg.color}` }}/>
-        <div style={{ flex:1, minWidth:0 }}>
-          <span style={{ fontSize:11, fontWeight:700, color:activeTFCfg.color, fontFamily:'var(--mono)' }}>
-            {activeTFCfg.label.toUpperCase()}
-          </span>
-          <span style={{ fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6 }}>
-            {activeTFCfg.desc}
-            {activeTF !== 'global' && ' · overrides global for this TF'}
-          </span>
-        </div>
-        {activeTF !== 'global' && tfPatterns[activeTF] && (
-          <button className="btn-small"
-            onClick={() => { const t={...tfPatterns}; delete t[activeTF]; update({ tfPatterns:t }) }}
-            style={{ borderColor:'var(--amber)', color:'var(--amber)', background:'rgba(255,167,38,.08)', fontSize:10, padding:'3px 8px' }}>
-            ↺ Reset
-          </button>
-        )}
-      </div>
-
-      {/* Bulk actions */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10, flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-          <button className="btn-small" onClick={() => setTFEnabled(activeTF, () => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=true); return n })}
-            style={{background:'rgba(0,230,118,0.12)',borderColor:'rgba(0,192,96,0.5)',color:'var(--green)',fontWeight:700}}>✓ All</button>
-          <button className="btn-small" onClick={() => setTFEnabled(activeTF, () => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=false); return n })}
-            style={{background:'rgba(255,70,70,0.08)',borderColor:'rgba(255,70,70,0.35)',color:'var(--red)',fontWeight:700}}>✗ All</button>
-          <button className="btn-small"
-            onClick={() => setTFEnabled(activeTF, p => { const n={...p}; ALL_SCANNERS.forEach(s=>{ if(s.side==='bull') n[s.id]=true }); return n })}
-            style={{background:'rgba(0,230,118,0.07)',borderColor:'rgba(0,192,96,0.35)',color:'var(--green)'}}>🟢 Bull</button>
-          <button className="btn-small"
-            onClick={() => setTFEnabled(activeTF, p => { const n={...p}; ALL_SCANNERS.forEach(s=>{ if(s.side==='bear') n[s.id]=true }); return n })}
-            style={{background:'rgba(255,70,70,0.07)',borderColor:'rgba(255,70,70,0.3)',color:'var(--red)'}}>🔴 Bear</button>
-        </div>
-        <div style={{ display:'flex', gap:4 }}>
-          {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,lbl])=>(
-            <button key={id} className="btn-small" onClick={() => setSideFilter(id)}
-              style={sideFilter===id?{borderColor:id==='bull'?'var(--green2)':id==='bear'?'var(--red2)':'var(--border2)',
-                color:id==='bull'?'var(--green)':id==='bear'?'var(--red)':'var(--text)',
-                background:id==='bull'?'var(--green-dim)':id==='bear'?'var(--red-dim)':'var(--bg3)',fontWeight:700}:{}}>{lbl}</button>
-          ))}
-        </div>
-      </div>
-
+      {/* Count */}
       <div style={{ fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginBottom:10 }}>
-        {enabledCount}/{visible.length} active for{' '}
-        <span style={{ color:activeTFCfg.color }}>{activeTFCfg.label}</span>
-        {activeTF !== 'global' && (
-          <span style={{ marginLeft:6, color:'var(--text3)' }}>
-            · {ALL_SCANNERS.length} total patterns
+        <span style={{ color:'var(--text)' }}>{enabledCount}</span>/{visible.length} enabled
+        {tfFilter !== 'all' && (
+          <span style={{ color: TF_META[tfFilter]?.color||'var(--accent)', marginLeft:6 }}>
+            · showing patterns on {tfFilter}
           </span>
         )}
       </div>
 
+      {/* Pattern cards */}
       <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
         {visible.map(s => (
-          <ScannerDefCard key={s.id} scanner={s}
-            expanded={!!expanded[s.id]} onTap={() => setExpanded(p => ({...p,[s.id]:!p[s.id]}))}
-            enabled={enabledMap[s.id]} onToggle={v => setTFEnabled(activeTF, p => ({...p,[s.id]:v}))}/>
+          <ScannerDefCard
+            key={s.id}
+            scanner={s}
+            expanded={!!expanded[s.id]}
+            onTap={() => setExpanded(p => ({...p,[s.id]:!p[s.id]}))}
+            enabled={scannerEnabled[s.id]}
+            onToggle={v => setEnabled(s.id, v)}
+            selectedTfs={patternTfs[s.id] || defaultTfsForScanner(s)}
+            onTfsChange={tfs => setPatternTfs(s.id, tfs)}
+          />
         ))}
       </div>
     </div>
@@ -343,7 +513,6 @@ function PatternManager({ settings, update }) {
 export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, openCount=0 }) {
   const [resetMsg, setResetMsg] = React.useState('')
   const [resetConfirm, setResetConfirm] = React.useState(false)
-  // openCount increments from parent each time Settings tab is visited → collapses all accordions
   const openKey = openCount
 
   function handleReset() {
@@ -357,54 +526,41 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
     setResetMsg('✓ Settings reset to defaults')
     setTimeout(() => setResetMsg(''), 3500)
   }
+
   return (
     <div>
-      {/* Header */}
       <div style={{ marginBottom:12 }}>
         <h2 style={{ fontSize:18,fontWeight:800,letterSpacing:'-.02em',marginBottom:2 }}>Settings</h2>
         <p style={{ fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)' }}>
-          Configuration · per-TF pattern overrides supported
+          Configuration · per-pattern timeframe control
         </p>
       </div>
 
-      {/* Account */}
       <Accordion title="Account & Sync" icon="👤" defaultOpen={false} accentColor="var(--accent)" openKey={openKey}>
         <AccountSection user={user} onUserChange={onUserChange}
           cloudSynced={cloudSynced} cloudSaving={cloudSaving} onSaveNow={onSaveNow}/>
       </Accordion>
 
-      {/* Scan settings */}
       <Accordion title="Scan Settings" icon="⬡" badge="GLOBAL" defaultOpen={false} accentColor="var(--accent)" openKey={openKey}>
         <ScanSettingsSection settings={settings} update={update}/>
       </Accordion>
 
-      {/* Pattern manager */}
       <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)" openKey={openKey}>
-        <div style={{background:'rgba(150,100,255,0.07)',border:'1px solid rgba(150,100,255,0.22)',borderRadius:8,padding:'8px 11px',marginBottom:10}}>
-          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'#b388ff',fontWeight:700,marginBottom:2}}>⚡ EMA + RSI Patterns — per-timeframe</div>
-          <div style={{fontSize:10,color:'var(--text3)',lineHeight:1.5}}>
-            Set global defaults in <b style={{color:'#00b8d9'}}>All TF</b>, then override per timeframe. Each TF scanner can run a different pattern set.
-          </div>
-        </div>
         <PatternManager settings={settings} update={update}/>
       </Accordion>
 
-      {/* Alerts */}
       <Accordion title="Alerts & Notifications" icon="◈" defaultOpen={false} accentColor="rgba(255,167,38,0.5)" openKey={openKey}>
         <AlertsSection cfg={settings} set={set}/>
       </Accordion>
 
-      {/* Appearance */}
       <Accordion title="Appearance" icon="◑" defaultOpen={false} openKey={openKey}>
         <AppearanceSection cfg={settings} set={set}/>
       </Accordion>
 
-      {/* Signal strength */}
       <Accordion title="Signal Strength Filters" icon="◉" defaultOpen={false} accentColor="rgba(0,184,217,0.4)" openKey={openKey}>
         <SignalStrengthSection cfg={settings} set={set}/>
       </Accordion>
 
-      {/* Custom pairs */}
       <Accordion title="Custom Pairs" icon="⊞" defaultOpen={false} accentColor="rgba(179,136,255,0.4)" openKey={openKey}>
         <CustomPairsSection cfg={settings} set={set}/>
       </Accordion>

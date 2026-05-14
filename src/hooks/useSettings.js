@@ -26,6 +26,7 @@ export const DEFAULTS = {
   volumeFilter:  '500k',
   resultFilter:  'all',
   patternsMode:  'all',
+  patternTfs:    {},   // { [scannerId]: string[] } — per-pattern TF selections
   soundEnabled: true,
   tgOn:         false,
   tgToken:      '',
