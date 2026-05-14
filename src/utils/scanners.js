@@ -667,103 +667,100 @@ export const ADVANCED_SCANNERS = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Buy Signal 3M  —  Bull
+  // Buy Signal 3M  —  Bull  (First-Touch EMA16 Entry)
   //
-  // Skip the 2 most recent candles (curr / c1).
-  // Evaluate candles -2 through -7 (6 candles):
-  //   ① EMA25 ptc > 0.0015 for every candle in that window  (EMA25 rising ≥ 0.15%/bar)
-  //   ② EMA50 ptc > 0.0015 for every candle in that window  (EMA50 rising ≥ 0.15%/bar)
-  // ③ Current RSI > 60                                       (RSI breakout)
-  // ④ Current OR previous candle low < EMA16 × 1.002        (price near EMA16)
-  // ⑤ Current candle open < close × 0.999                   (green body candle)
+  // Pattern (from chart image):
+  //   c1  = TOUCH candle : low dips to EMA16 (first time after a run-up)
+  //   curr = ENTRY candle : green body candle immediately after the touch
+  //
+  // Conditions:
+  //   ① EMA stack (curr): EMA16 > EMA25 > EMA50                (bullish order)
+  //   ② EMA25 overall rising: curr.ema25 > c6.ema25            (net rising over 6 bars)
+  //   ③ EMA50 overall rising: curr.ema50 > c6.ema50            (net rising over 6 bars)
+  //   ④ TOUCH candle (c1): c1.low < c1.ema16 × 1.002           (low tagged EMA16)
+  //   ⑤ FRESH touch — c2, c3, c4 did NOT touch EMA16:
+  //        c2.low > c2.ema16 × 1.002  AND
+  //        c3.low > c3.ema16 × 1.002  AND
+  //        c4.low > c4.ema16 × 1.002  (price was running above EMA16)
+  //   ⑥ RSI > 60 (current)
+  //   ⑦ ENTRY candle (curr): open < close × 0.999              (green body)
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: 'buy_signal_3m', side: 'bull', icon: '🚀',
     name: 'Buy Signal 3M',
-    sub: 'EMA25/50 rising ptc>0.0015 [-2→-7] + RSI>60 + price tags EMA16',
+    sub: 'First EMA16 touch after run-up · EMA stack bullish · RSI>60 · green entry',
     badge: 'BULL', badgeCls: 'badge-green',
     group: 'advanced',
     tfs: ['3m', '5m', '15m'],
     conditions: [
-      'Skip candles 0 and -1 (most recent 2 not evaluated)',
-      'EMA25 ptc > 0.0015 for each of candles -2 → -7  (rising ≥ 0.15% per bar)',
-      'EMA50 ptc > 0.0015 for each of candles -2 → -7  (rising ≥ 0.15% per bar)',
-      'Current RSI > 60  (RSI breakout above 60)',
-      'Current or previous candle low < EMA16 × 1.002  (price tags EMA16)',
-      'Current candle: open < close × 0.999  (bullish body, not doji)',
+      'EMA stack: EMA16 > EMA25 > EMA50  (bullish order, current candle)',
+      'EMA25 net rising: curr.ema25 > candle[-6].ema25',
+      'EMA50 net rising: curr.ema50 > candle[-6].ema50',
+      'Touch candle (c1): c1.low < c1.ema16 × 1.002  (low tagged EMA16)',
+      'Fresh touch: c2/c3/c4 lows all > their EMA16 × 1.002  (price ran above EMA16 before touch)',
+      'Current RSI > 60',
+      'Entry candle (curr): open < close × 0.999  (green body)',
     ],
     logic(candles) {
-      if (!candles || candles.length < 20) return null
+      if (!candles || candles.length < 15) return null
       const len  = candles.length
-      const curr = candles[len - 1]   //  0  (skip — not evaluated for EMA slope)
-      const c1   = candles[len - 2]   // -1  (skip)
-      // Window: -2 to -7 (indices len-3 to len-8)
-      const window = [
-        candles[len - 3],   // -2
-        candles[len - 4],   // -3
-        candles[len - 5],   // -4
-        candles[len - 6],   // -5
-        candles[len - 7],   // -6
-        candles[len - 8],   // -7
-      ]
-      // Previous candles for ptc comparison (-3 to -8 vs -4 to -9)
-      const prevWindow = [
-        candles[len - 4],   // -3 (prev of -2)
-        candles[len - 5],   // -4
-        candles[len - 6],   // -5
-        candles[len - 7],   // -6
-        candles[len - 8],   // -7
-        candles[len - 9],   // -8 (prev of -7)
-      ]
+      const curr = candles[len - 1]   // entry candle (green)
+      const c1   = candles[len - 2]   // touch candle (low tags EMA16)
+      const c2   = candles[len - 3]   // must NOT have tagged EMA16
+      const c3   = candles[len - 4]   // must NOT have tagged EMA16
+      const c4   = candles[len - 5]   // must NOT have tagged EMA16
+      const c6   = candles[len - 7]   // for net-rising EMA25/50 check
 
-      // EMA existence check for window
-      for (const c of [...window, ...prevWindow]) {
-        if (c.ema25 == null || c.ema50 == null) return null
-      }
-      if (curr.rsi == null || curr.ema16 == null) return null
-      if (c1.ema16 == null) return null
+      // EMA existence checks
+      if (curr.ema16 == null || curr.ema25 == null || curr.ema50 == null) return null
+      if (curr.rsi   == null) return null
+      if (c1.ema16   == null) return null
+      if (c2.ema16   == null || c3.ema16 == null || c4.ema16 == null) return null
+      if (c6.ema25   == null || c6.ema50 == null) return null
 
-      // ① EMA25 ptc > 0.0015 for -2 → -7  (each candle rises ≥ 0.15%)
-      for (let i = 0; i < 6; i++) {
-        if (window[i].ema25 <= prevWindow[i].ema25 * 1.0015) return null
-      }
+      // ① EMA stack: EMA16 > EMA25 > EMA50
+      if (curr.ema16 <= curr.ema25) return null
+      if (curr.ema25 <= curr.ema50) return null
 
-      // ② EMA50 ptc > 0.0015 for -2 → -7
-      for (let i = 0; i < 6; i++) {
-        if (window[i].ema50 <= prevWindow[i].ema50 * 1.0015) return null
-      }
+      // ② EMA25 net rising over 6 bars
+      if (curr.ema25 <= c6.ema25) return null
 
-      // ③ Current RSI > 60
+      // ③ EMA50 net rising over 6 bars
+      if (curr.ema50 <= c6.ema50) return null
+
+      // ④ Touch candle: c1.low < c1.ema16 × 1.002  (tagged EMA16)
+      if (c1.low >= c1.ema16 * 1.002) return null
+
+      // ⑤ Fresh touch: c2, c3, c4 did NOT touch EMA16 (they were running above it)
+      if (c2.low < c2.ema16 * 1.002) return null
+      if (c3.low < c3.ema16 * 1.002) return null
+      if (c4.low < c4.ema16 * 1.002) return null
+
+      // ⑥ RSI > 60
       if (curr.rsi <= 60) return null
 
-      // ④ Current or previous candle low < EMA16 × 1.002
-      const currTagsEma16 = curr.low < curr.ema16 * 1.002
-      const prevTagsEma16 = c1.low   < c1.ema16  * 1.002
-      if (!currTagsEma16 && !prevTagsEma16) return null
-
-      // ⑤ Current candle: open < close × 0.999  (clear green body)
+      // ⑦ Entry candle: green body
       if (curr.open >= curr.close * 0.999) return null
 
-      // ─── Build result ────────────────────────────────────────────────────
-      const tagStr   = currTagsEma16 ? 'curr' : 'prev(-1)'
-      const tagLow   = currTagsEma16 ? curr.low : c1.low
-      const gain     = ((curr.close - tagLow) / tagLow * 100).toFixed(2)
-      const run      = candles.slice(len - 9, len)
-      const e25ptc   = ((window[0].ema25 - prevWindow[0].ema25) / prevWindow[0].ema25 * 100).toFixed(4)
-      const e50ptc   = ((window[0].ema50 - prevWindow[0].ema50) / prevWindow[0].ema50 * 100).toFixed(4)
+      // ─── Build result ─────────────────────────────────────────────────
+      const e25rise = ((curr.ema25 - c6.ema25) / c6.ema25 * 100).toFixed(3)
+      const e50rise = ((curr.ema50 - c6.ema50) / c6.ema50 * 100).toFixed(3)
+      const gap16   = ((c1.low / c1.ema16 - 1) * 100).toFixed(3)
+      const run     = candles.slice(len - 8, len)
 
       return {
-        candleCount: 9,
-        gainPct: gain,
+        candleCount: 8,
+        gainPct: ((curr.close - c1.low) / c1.low * 100).toFixed(2),
         highestClose: curr.close,
-        lowestOpen:   tagLow,
+        lowestOpen:   c1.low,
         conds: [
-          `✓ Candles -2→-7 evaluated (curr/-1 skipped)`,
-          `✓ EMA25 rising [-2→-7] ptc>0.0015 (ptc@-2: +${e25ptc}%)`,
-          `✓ EMA50 rising [-2→-7] ptc>0.0015 (ptc@-2: +${e50ptc}%)`,
-          `✓ Current RSI ${curr.rsi.toFixed(1)} > 60`,
-          `✓ ${tagStr} low ${tagLow.toFixed(4)} < EMA16×1.002 (${(curr.ema16*1.002).toFixed(4)})`,
-          `✓ Open ${curr.open.toFixed(4)} < close×0.999 (${(curr.close*0.999).toFixed(4)})`,
+          `✓ EMA stack: EMA16 ${curr.ema16.toFixed(4)} > EMA25 ${curr.ema25.toFixed(4)} > EMA50 ${curr.ema50.toFixed(4)}`,
+          `✓ EMA25 net +${e25rise}% over 6 bars`,
+          `✓ EMA50 net +${e50rise}% over 6 bars`,
+          `✓ Touch(c1) low ${c1.low.toFixed(4)} < EMA16×1.002 (${(c1.ema16*1.002).toFixed(4)}) · gap ${gap16}%`,
+          `✓ Fresh: c2/c3/c4 lows were above EMA16 (price ran up before touch)`,
+          `✓ RSI ${curr.rsi.toFixed(1)} > 60`,
+          `✓ Entry green: open ${curr.open.toFixed(4)} < close×0.999 (${(curr.close*0.999).toFixed(4)})`,
         ],
         run,
         ema16: curr.ema16,
@@ -800,75 +797,101 @@ export const ADVANCED_SCANNERS = [
       'Current or previous candle high > EMA16 × 0.998  (price tags EMA16)',
       'Current candle: close < open × 0.999  (bearish body, not doji)',
     ],
+  // ─────────────────────────────────────────────────────────────────────────
+  // Sell Signal 3M  —  Bear  (exact mirror of Buy Signal 3M)
+  //
+  // Pattern:
+  //   c1  = TOUCH candle : high spikes UP to EMA16 (first time after a run-down)
+  //   curr = ENTRY candle : red body candle immediately after the touch
+  //
+  // Conditions:
+  //   ① EMA stack (curr): EMA16 < EMA25 < EMA50                (bearish order)
+  //   ② EMA25 overall falling: curr.ema25 < c6.ema25           (net falling over 6 bars)
+  //   ③ EMA50 overall falling: curr.ema50 < c6.ema50           (net falling over 6 bars)
+  //   ④ TOUCH candle (c1): c1.high > c1.ema16 × 0.998          (high tagged EMA16)
+  //   ⑤ FRESH touch — c2, c3, c4 did NOT touch EMA16:
+  //        c2.high < c2.ema16 × 0.998  AND
+  //        c3.high < c3.ema16 × 0.998  AND
+  //        c4.high < c4.ema16 × 0.998  (price was running below EMA16)
+  //   ⑥ RSI < 40 (current)
+  //   ⑦ ENTRY candle (curr): close < open × 0.999              (red body)
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: 'sell_signal_3m', side: 'bear', icon: '💣',
+    name: 'Sell Signal 3M',
+    sub: 'First EMA16 touch after run-down · EMA stack bearish · RSI<40 · red entry',
+    badge: 'BEAR', badgeCls: 'badge-red',
+    group: 'advanced',
+    tfs: ['3m', '5m', '15m'],
+    conditions: [
+      'EMA stack: EMA16 < EMA25 < EMA50  (bearish order, current candle)',
+      'EMA25 net falling: curr.ema25 < candle[-6].ema25',
+      'EMA50 net falling: curr.ema50 < candle[-6].ema50',
+      'Touch candle (c1): c1.high > c1.ema16 × 0.998  (high spiked to EMA16)',
+      'Fresh touch: c2/c3/c4 highs all < their EMA16 × 0.998  (price ran below EMA16 before touch)',
+      'Current RSI < 40',
+      'Entry candle (curr): close < open × 0.999  (red body)',
+    ],
     logic(candles) {
-      if (!candles || candles.length < 20) return null
+      if (!candles || candles.length < 15) return null
       const len  = candles.length
-      const curr = candles[len - 1]
-      const c1   = candles[len - 2]
-      const window = [
-        candles[len - 3],   // -2
-        candles[len - 4],   // -3
-        candles[len - 5],   // -4
-        candles[len - 6],   // -5
-        candles[len - 7],   // -6
-        candles[len - 8],   // -7
-      ]
-      const prevWindow = [
-        candles[len - 4],
-        candles[len - 5],
-        candles[len - 6],
-        candles[len - 7],
-        candles[len - 8],
-        candles[len - 9],
-      ]
+      const curr = candles[len - 1]   // entry candle (red)
+      const c1   = candles[len - 2]   // touch candle (high tags EMA16)
+      const c2   = candles[len - 3]   // must NOT have tagged EMA16
+      const c3   = candles[len - 4]   // must NOT have tagged EMA16
+      const c4   = candles[len - 5]   // must NOT have tagged EMA16
+      const c6   = candles[len - 7]   // for net-falling EMA25/50 check
 
-      for (const c of [...window, ...prevWindow]) {
-        if (c.ema25 == null || c.ema50 == null) return null
-      }
-      if (curr.rsi == null || curr.ema16 == null) return null
-      if (c1.ema16 == null) return null
+      // EMA existence checks
+      if (curr.ema16 == null || curr.ema25 == null || curr.ema50 == null) return null
+      if (curr.rsi   == null) return null
+      if (c1.ema16   == null) return null
+      if (c2.ema16   == null || c3.ema16 == null || c4.ema16 == null) return null
+      if (c6.ema25   == null || c6.ema50 == null) return null
 
-      // ① EMA25 ptc < -0.0015 for -2 → -7  (falling ≥ 0.15%)
-      for (let i = 0; i < 6; i++) {
-        if (window[i].ema25 >= prevWindow[i].ema25 * 0.9985) return null
-      }
+      // ① EMA stack: EMA16 < EMA25 < EMA50  (bearish)
+      if (curr.ema16 >= curr.ema25) return null
+      if (curr.ema25 >= curr.ema50) return null
 
-      // ② EMA50 ptc < -0.0015 for -2 → -7
-      for (let i = 0; i < 6; i++) {
-        if (window[i].ema50 >= prevWindow[i].ema50 * 0.9985) return null
-      }
+      // ② EMA25 net falling over 6 bars
+      if (curr.ema25 >= c6.ema25) return null
 
-      // ③ Current RSI < 40
+      // ③ EMA50 net falling over 6 bars
+      if (curr.ema50 >= c6.ema50) return null
+
+      // ④ Touch candle: c1.high > c1.ema16 × 0.998  (tagged EMA16 from below)
+      if (c1.high <= c1.ema16 * 0.998) return null
+
+      // ⑤ Fresh touch: c2, c3, c4 did NOT touch EMA16 (running below it)
+      if (c2.high > c2.ema16 * 0.998) return null
+      if (c3.high > c3.ema16 * 0.998) return null
+      if (c4.high > c4.ema16 * 0.998) return null
+
+      // ⑥ RSI < 40
       if (curr.rsi >= 40) return null
 
-      // ④ Current or previous candle high > EMA16 × 0.998
-      const currTagsEma16 = curr.high > curr.ema16 * 0.998
-      const prevTagsEma16 = c1.high   > c1.ema16  * 0.998
-      if (!currTagsEma16 && !prevTagsEma16) return null
-
-      // ⑤ Current candle: close < open × 0.999  (clear red body)
+      // ⑦ Entry candle: red body
       if (curr.close >= curr.open * 0.999) return null
 
-      // ─── Build result ────────────────────────────────────────────────────
-      const tagStr   = currTagsEma16 ? 'curr' : 'prev(-1)'
-      const tagHigh  = currTagsEma16 ? curr.high : c1.high
-      const drop     = ((tagHigh - curr.close) / tagHigh * 100).toFixed(2)
-      const run      = candles.slice(len - 9, len)
-      const e25ptc   = ((window[0].ema25 - prevWindow[0].ema25) / prevWindow[0].ema25 * 100).toFixed(4)
-      const e50ptc   = ((window[0].ema50 - prevWindow[0].ema50) / prevWindow[0].ema50 * 100).toFixed(4)
+      // ─── Build result ─────────────────────────────────────────────────
+      const e25fall = ((curr.ema25 - c6.ema25) / c6.ema25 * 100).toFixed(3)
+      const e50fall = ((curr.ema50 - c6.ema50) / c6.ema50 * 100).toFixed(3)
+      const gap16   = ((c1.high / c1.ema16 - 1) * 100).toFixed(3)
+      const run     = candles.slice(len - 8, len)
 
       return {
-        candleCount: 9,
-        gainPct: drop,
-        highestClose: tagHigh,
+        candleCount: 8,
+        gainPct: ((c1.high - curr.close) / c1.high * 100).toFixed(2),
+        highestClose: c1.high,
         lowestOpen:   curr.close,
         conds: [
-          `✓ Candles -2→-7 evaluated (curr/-1 skipped)`,
-          `✓ EMA25 falling [-2→-7] ptc<-0.0015 (ptc@-2: ${e25ptc}%)`,
-          `✓ EMA50 falling [-2→-7] ptc<-0.0015 (ptc@-2: ${e50ptc}%)`,
-          `✓ Current RSI ${curr.rsi.toFixed(1)} < 40`,
-          `✓ ${tagStr} high ${tagHigh.toFixed(4)} > EMA16×0.998 (${(curr.ema16*0.998).toFixed(4)})`,
-          `✓ Close ${curr.close.toFixed(4)} < open×0.999 (${(curr.open*0.999).toFixed(4)})`,
+          `✓ EMA stack: EMA16 ${curr.ema16.toFixed(4)} < EMA25 ${curr.ema25.toFixed(4)} < EMA50 ${curr.ema50.toFixed(4)}`,
+          `✓ EMA25 net ${e25fall}% over 6 bars  (falling)`,
+          `✓ EMA50 net ${e50fall}% over 6 bars  (falling)`,
+          `✓ Touch(c1) high ${c1.high.toFixed(4)} > EMA16×0.998 (${(c1.ema16*0.998).toFixed(4)}) · gap ${gap16}%`,
+          `✓ Fresh: c2/c3/c4 highs were below EMA16 (price ran down before touch)`,
+          `✓ RSI ${curr.rsi.toFixed(1)} < 40`,
+          `✓ Entry red: close ${curr.close.toFixed(4)} < open×0.999 (${(curr.open*0.999).toFixed(4)})`,
         ],
         run,
         ema16: curr.ema16,
