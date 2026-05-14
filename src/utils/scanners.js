@@ -893,15 +893,13 @@ export const ADVANCED_SCANNERS = [
   //   ③ EMA50[-3] > EMA50[-18] × 1.0015  (EMA50 rose ≥ 0.15% over 15 bars)
   //   ④ EMA25 > EMA50 on current candle   (bullish EMA stack)
   //   ⑤ Dip candle: first match curr→-1→-2 where low < that candle's EMA16 × 1.0015
-  //   ⑥ Isolation: candles -5 → -10 each have low > their own EMA25
-  //   ⑦ Current candle: close > open  (green confirmation)
-  //   ⑧ Current candle body ≥ 15% of range  (not a doji)
-  //   ⑨ RSI > 50
+  //   ⑥ Isolation: candles -3 → -8 each have low > their own EMA25
+  //   ⑦ RSI > 50
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: 'ema16_dip_buy_3m', side: 'bull', icon: '🎯',
     name: 'EMA16 Dip Buy',
-    sub: 'EMA16/25/50 slope [-3 vs -18] + dip to EMA16 (curr/-1/-2) + lows above EMA25 [-5→-10] + green close + RSI>50',
+    sub: 'EMA16/25/50 slope [-3 vs -18] + dip to EMA16 (curr/-1/-2) + lows above EMA25 [-3→-8] + RSI>50',
     badge: 'BULL', badgeCls: 'badge-green',
     group: 'advanced',
     tfs: ['3m', '5m', '15m'],
@@ -911,9 +909,7 @@ export const ADVANCED_SCANNERS = [
       'EMA50[-3] > EMA50[-18] × 1.0015  (EMA50 rose ≥ 0.15% over 15 bars)',
       'EMA25 > EMA50 on current candle   (bullish EMA stack)',
       'First match curr → -1 → -2: candle low < its EMA16 × 1.0015  (dip candle)',
-      'Candles -5 → -10: each low > its own EMA25  (isolation — prior lows well above EMA25)',
-      'Current candle: close > open  (green confirmation)',
-      'Current candle body ≥ 15% of range  (not a doji)',
+      'Candles -3 → -8: each low > its own EMA25  (isolation — prior lows well above EMA25)',
       'RSI > 50',
     ],
     logic(candles) {
@@ -926,12 +922,12 @@ export const ADVANCED_SCANNERS = [
       const c18  = candles[len - 19]   // -18
 
       const isolationCandles = [
+        candles[len - 4],   // -3
+        candles[len - 5],   // -4
         candles[len - 6],   // -5
         candles[len - 7],   // -6
         candles[len - 8],   // -7
         candles[len - 9],   // -8
-        candles[len - 10],  // -9
-        candles[len - 11],  // -10
       ]
 
       if (c3.ema16 == null || c18.ema16 == null) return null
@@ -975,20 +971,12 @@ export const ADVANCED_SCANNERS = [
       }
       if (!dipCandle) return null
 
-      // ⑥ Isolation: candles -5 → -10 each low > their own EMA25
+      // ⑥ Isolation: candles -3 → -8 each low > their own EMA25
       for (const c of isolationCandles) {
         if (c.low <= c.ema25) return null
       }
 
-      // ⑦ Current candle green
-      if (curr.close <= curr.open) return null
-
-      // ⑧ Current candle body ≥ 15% of range
-      const currRange = curr.high - curr.low
-      const currBody  = curr.close - curr.open
-      if (currRange <= 0 || currBody / currRange < 0.15) return null
-
-      // ⑨ RSI > 50
+      // ⑦ RSI > 50
       if (curr.rsi <= 50) return null
 
       const dipLow   = dipCandle.low
@@ -998,7 +986,6 @@ export const ADVANCED_SCANNERS = [
       const e16pct   = ((c3.ema16 / c18.ema16 - 1) * 100).toFixed(3)
       const e25pct   = ((c3.ema25 / c18.ema25 - 1) * 100).toFixed(3)
       const e50pct   = ((c3.ema50 / c18.ema50 - 1) * 100).toFixed(3)
-      const bodyPct  = (currBody / currRange * 100).toFixed(0)
 
       return {
         candleCount: 9,
@@ -1011,9 +998,7 @@ export const ADVANCED_SCANNERS = [
           `✓ EMA50[-3 vs -18] +${e50pct}% (≥0.15%)`,
           `✓ EMA25 ${curr.ema25.toFixed(4)} > EMA50 ${curr.ema50.toFixed(4)}`,
           `✓ Dip candle: ${dipLabel} low ${dipLow.toFixed(4)} < EMA16×1.0015 (${(dipEma16*1.0015).toFixed(4)})`,
-          `✓ Candles -5→-10 lows all above their EMA25`,
-          `✓ Curr green: close ${curr.close.toFixed(4)} > open ${curr.open.toFixed(4)}`,
-          `✓ Body ${bodyPct}% of range (≥15%)`,
+          `✓ Candles -3→-8 lows all above their EMA25`,
           `✓ RSI ${curr.rsi.toFixed(1)} > 50`,
         ],
         run,
