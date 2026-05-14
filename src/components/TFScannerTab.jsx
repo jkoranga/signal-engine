@@ -325,13 +325,14 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     return ALL_SCANNERS.filter(s => {
       if (!scannerEnabled[s.id]) return false
       if (scanMode !== 'all' && scanMode !== 'single' && scanMode !== 'custom' && s.side !== scanMode) return false
-      // Only filter by TF if the user has explicitly saved a patternTfs config for this scanner.
-      // If not saved, run the scanner on ALL timeframes so results appear everywhere.
-      if (patternTfs && s.id in patternTfs) {
+      // If user has explicitly saved a patternTfs config for this scanner, respect it.
+      if (s.id in patternTfs) {
         const tfs = patternTfs[s.id]
-        return tfs.length === 0 || tfs.includes(timeframe)
+        // [] means user cleared all TFs — skip this scanner entirely
+        return tfs.length > 0 && tfs.includes(timeframe)
       }
-      // No user override — run on all TFs by default
+      // No user override saved — run on all TFs by default.
+      // (scanner.tfs is only a UI hint for the Settings panel, not a runtime filter)
       return true
     })
   }, [scannerEnabled, scanMode, settings.patternTfs, timeframe])
@@ -432,37 +433,27 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
     if (loopRef.current) { setLoopCount(c=>c+1); setTimeout(()=>runScan(symOverride),300) }
   }, [timeframe]) // eslint-disable-line
 
-  // ── Auto-scan: trigger 2s after mount for every TF tab ────────────────────
-  const initialScanDone = useRef(false)
-  useEffect(() => {
-    if (initialScanDone.current) return
-    initialScanDone.current = true
-    // Arm auto-mode immediately so the Scan button shows "Auto" state
-    setEnabled(true)
-    const tryRun = () => {
-      if (symbolsRef.current.length > 0 && scannersRef.current.length > 0) {
-        runScan()
-      } else {
-        setTimeout(tryRun, 400)
-      }
-    }
-    setTimeout(tryRun, 2000)
-  }, []) // eslint-disable-line
-
-  // ── Auto-scan on tab activation: run immediately when user switches to this TF ─
+  // ── Auto-scan on tab activation: run when user switches to this TF ─────────
   const prevActiveRef = useRef(isActive)
+  const hasScannedOnce = useRef(false)
   useEffect(() => {
     const wasActive = prevActiveRef.current
     prevActiveRef.current = isActive
-    // Only react to becoming active (not on first render — handled above)
-    if (!isActive || wasActive) return
+    if (!isActive) return
     if (scanningRef.current) return
-    // Small delay so the tab transition renders first
-    const t = setTimeout(() => {
+    // Scan on first visit to this tab, and on every subsequent tab switch to it
+    if (wasActive && hasScannedOnce.current) return
+
+    // If symbols are still loading, retry until they're ready
+    const tryRun = () => {
       if (symbolsRef.current.length > 0 && scannersRef.current.length > 0 && !scanningRef.current) {
+        hasScannedOnce.current = true
         runScan()
+      } else if (!hasScannedOnce.current) {
+        setTimeout(tryRun, 400)
       }
-    }, 300)
+    }
+    const t = setTimeout(tryRun, 300)
     return () => clearTimeout(t)
   }, [isActive, runScan])
 
