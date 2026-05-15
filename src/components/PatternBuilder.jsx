@@ -1,104 +1,112 @@
-// ─── Pattern Builder ──────────────────────────────────────────────────────────
-// Visual editor: build custom scan patterns with EMA/RSI/OHLCV conditions
-// on any candle offset. Compiles to a live logic() function at runtime.
+// ─── Pattern Builder v2 ───────────────────────────────────────────────────────
+import React, { useState, useMemo } from 'react'
 
-import React, { useState, useCallback, useMemo, useRef } from 'react'
-
-// ── Candle fields the user can pick ──────────────────────────────────────────
-const CANDLE_FIELDS = [
-  { id: 'close',  label: 'Close',   group: 'OHLCV' },
-  { id: 'open',   label: 'Open',    group: 'OHLCV' },
-  { id: 'high',   label: 'High',    group: 'OHLCV' },
-  { id: 'low',    label: 'Low',     group: 'OHLCV' },
-  { id: 'volume', label: 'Volume',  group: 'OHLCV' },
-  { id: 'ema9',   label: 'EMA 9',   group: 'EMA' },
-  { id: 'ema20',  label: 'EMA 20',  group: 'EMA' },
-  { id: 'ema40',  label: 'EMA 40',  group: 'EMA' },
-  { id: 'ema16',  label: 'EMA 16',  group: 'EMA' },
-  { id: 'ema25',  label: 'EMA 25',  group: 'EMA' },
-  { id: 'ema50',  label: 'EMA 50',  group: 'EMA' },
-  { id: 'rsi',    label: 'RSI 14',  group: 'RSI' },
-  // Computed shortcuts
-  { id: 'body',         label: 'Body Size',      group: 'Calc', computed: c => Math.abs(c.close - c.open) },
-  { id: 'range',        label: 'Full Range',      group: 'Calc', computed: c => c.high - c.low },
-  { id: 'bodyPct',      label: 'Body %',          group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
-  { id: 'isGreen',      label: 'Is Green (1/0)',  group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
-  { id: 'isRed',        label: 'Is Red (1/0)',    group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
-  { id: 'upperWick',    label: 'Upper Wick',      group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
-  { id: 'lowerWick',    label: 'Lower Wick',      group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
+// ── Field catalogue ───────────────────────────────────────────────────────────
+const FIELDS = [
+  { id: 'close',     label: 'Close',      short: 'Close',  group: 'Price' },
+  { id: 'open',      label: 'Open',       short: 'Open',   group: 'Price' },
+  { id: 'high',      label: 'High',       short: 'High',   group: 'Price' },
+  { id: 'low',       label: 'Low',        short: 'Low',    group: 'Price' },
+  { id: 'volume',    label: 'Volume',     short: 'Vol',    group: 'Price' },
+  { id: 'ema9',      label: 'EMA 9',      short: 'EMA9',   group: 'EMA' },
+  { id: 'ema20',     label: 'EMA 20',     short: 'EMA20',  group: 'EMA' },
+  { id: 'ema40',     label: 'EMA 40',     short: 'EMA40',  group: 'EMA' },
+  { id: 'ema16',     label: 'EMA 16',     short: 'EMA16',  group: 'EMA' },
+  { id: 'ema25',     label: 'EMA 25',     short: 'EMA25',  group: 'EMA' },
+  { id: 'ema50',     label: 'EMA 50',     short: 'EMA50',  group: 'EMA' },
+  { id: 'rsi',       label: 'RSI 14',     short: 'RSI',    group: 'Indicator' },
+  { id: 'bodyPct',   label: 'Body %',     short: 'Body%',  group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
+  { id: 'body',      label: 'Body Size',  short: 'Body',   group: 'Calc', computed: c => Math.abs(c.close - c.open) },
+  { id: 'range',     label: 'Range H-L',  short: 'Range',  group: 'Calc', computed: c => c.high - c.low },
+  { id: 'upperWick', label: 'Upper Wick', short: 'UWick',  group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
+  { id: 'lowerWick', label: 'Lower Wick', short: 'LWick',  group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
+  { id: 'isGreen',   label: 'Is Green',   short: 'Green?', group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
+  { id: 'isRed',     label: 'Is Red',     short: 'Red?',   group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
 ]
-const FIELD_MAP = Object.fromEntries(CANDLE_FIELDS.map(f => [f.id, f]))
+const FIELD_MAP = Object.fromEntries(FIELDS.map(f => [f.id, f]))
+const FIELD_GROUPS = FIELDS.reduce((g, f) => { (g[f.group] = g[f.group] || []).push(f); return g }, {})
 
-// Right-hand side: either another candle field or a literal number / multiplier
-const RHS_TYPES = [
-  { id: 'number',   label: 'Number'       },
-  { id: 'field',    label: 'Candle Field' },
-  { id: 'multiply', label: 'Field × Mult' },
-  { id: 'pct',      label: 'Field + %'   },
-]
+const OPS = ['>', '>=', '<', '<=', '=', '≠']
+const OP_SYM = { '=': '==', '≠': '!=' }
 
-const OPERATORS = [
-  { id: '>',  label: '>'  },
-  { id: '>=', label: '>=' },
-  { id: '<',  label: '<'  },
-  { id: '<=', label: '<=' },
-  { id: '==', label: '='  },
-  { id: '!=', label: '≠'  },
+// RHS modes
+const RHS_MODES = [
+  { id: 'number',  label: 'Value',       hint: 'A fixed number' },
+  { id: 'field',   label: 'Field',       hint: 'Another candle field' },
+  { id: 'mult',    label: '× Mult',      hint: 'Field × multiplier  e.g. EMA20[-2] × 1.5' },
+  { id: 'pct',     label: '± %',         hint: 'Field ± percent  e.g. EMA20[-2] + 0.35%' },
+  { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
 ]
 
-const CANDLE_OFFSETS = Array.from({ length: 11 }, (_, i) => ({
-  id: -i,
-  label: i === 0 ? 'Current [0]' : `Previous [-${i}]`,
-}))
+const OFFSETS = Array.from({ length: 11 }, (_, i) =>
+  i === 0 ? { v: 0, label: '[0] Current' } : { v: -i, label: `[-${i}] Prev ${i}` }
+)
 
-// ── Colours ───────────────────────────────────────────────────────────────────
-const GREEN  = 'var(--green)'
-const RED    = 'var(--red)'
-const ACCENT = '#b388ff'
+const TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
+const ICONS   = ['⭐','💹','📈','📉','🚀','💣','🎯','⚡','🔥','💎','🌊','🧲','🔔','🏹']
 
-// ── New blank condition ───────────────────────────────────────────────────────
+const G = 'var(--green)'
+const R = 'var(--red)'
+const A = '#b388ff'
+const BLU = '#4dabf7'
+const AMB = '#ffa000'
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6) }
+
+// ── Formula label ─────────────────────────────────────────────────────────────
+export function condFormula(c) {
+  const lhsF = FIELD_MAP[c.lhsField]?.short || c.lhsField
+  const lhsO = c.lhsOffset === 0 ? '' : `[${c.lhsOffset}]`
+  const lhs  = `${lhsF}${lhsO}`
+  const op   = c.op
+
+  if (c.rhsMode === 'number')  return `${lhs} ${op} ${c.rhsNum ?? 0}`
+
+  const rhsF = FIELD_MAP[c.rhsField]?.short || (c.rhsField || '?')
+  const rhsO = (c.rhsOffset ?? 0) === 0 ? '' : `[${c.rhsOffset}]`
+  const rhs  = `${rhsF}${rhsO}`
+
+  if (c.rhsMode === 'field')   return `${lhs} ${op} ${rhs}`
+  if (c.rhsMode === 'mult')    return `${lhs} ${op} ${rhs} × ${c.rhsMult ?? 1}`
+  if (c.rhsMode === 'pct') {
+    const s = (c.rhsPct ?? 0) >= 0 ? '+' : ''
+    return `${lhs} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
+  }
+  if (c.rhsMode === 'pctdiff') return `(${lhs}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+  return `${lhs} ${op} ?`
+}
+
+// ── Blank items ───────────────────────────────────────────────────────────────
 function blankCond() {
   return {
-    id: Date.now() + Math.random(),
-    lhsField: 'close',
-    lhsOffset: 0,
+    id: uid(), enabled: true, joinNext: 'AND',
+    lhsField: 'ema20', lhsOffset: 0,
     op: '>',
-    rhsType: 'number',
-    rhsNumber: 0,
-    rhsField: 'close',
-    rhsOffset: 0,
-    rhsMult: 1,
-    rhsPct: 0,
-    enabled: true,
+    rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
+    rhsNum: 0, rhsMult: 1, rhsPct: 0,
   }
 }
 
-// ── New blank pattern ─────────────────────────────────────────────────────────
 export function blankPattern() {
   return {
-    id: `custom_${Date.now()}`,
-    name: 'My Pattern',
-    side: 'bull',
-    icon: '⭐',
-    tfs: ['15m', '1h'],
+    id: `custom_${uid()}`,
+    name: 'My Pattern', side: 'bull', icon: '⭐',
+    tfs: ['15m','1h'],
     conditions: [blankCond()],
-    enabled: true,
-    createdAt: Date.now(),
+    enabled: true, createdAt: Date.now(),
   }
 }
 
-// ── Compile a pattern's condition array → a logic(candles) function ───────────
+// ── Compile pattern → logic(candles) ─────────────────────────────────────────
 export function compilePattern(pattern) {
   return function logic(candles) {
-    if (!candles || candles.length < 10) return null
+    if (!candles || candles.length < 5) return null
     const len = candles.length
 
     function getC(offset) {
-      const idx = len - 1 + offset  // offset is 0 or negative
-      if (idx < 0) return null
-      return candles[idx]
+      const idx = len - 1 + offset
+      return idx >= 0 ? candles[idx] : null
     }
-
     function getVal(candle, fieldId) {
       if (!candle) return null
       const f = FIELD_MAP[fieldId]
@@ -108,450 +116,314 @@ export function compilePattern(pattern) {
       return v == null ? null : v
     }
 
-    for (const cond of pattern.conditions) {
-      if (!cond.enabled) continue
+    const active = pattern.conditions.filter(c => c.enabled)
+    if (!active.length) return null
 
-      const lhsC = getC(cond.lhsOffset)
-      const lhsV = getVal(lhsC, cond.lhsField)
+    function evalCond(cond) {
+      const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField)
       if (lhsV == null) return null
 
       let rhsV
-      if (cond.rhsType === 'number') {
-        rhsV = parseFloat(cond.rhsNumber) || 0
-      } else if (cond.rhsType === 'field') {
-        const rhsC = getC(cond.rhsOffset)
-        rhsV = getVal(rhsC, cond.rhsField)
-        if (rhsV == null) return null
-      } else if (cond.rhsType === 'multiply') {
-        const rhsC = getC(cond.rhsOffset)
-        const base = getVal(rhsC, cond.rhsField)
-        if (base == null) return null
-        rhsV = base * (parseFloat(cond.rhsMult) || 1)
-      } else if (cond.rhsType === 'pct') {
-        const rhsC = getC(cond.rhsOffset)
-        const base = getVal(rhsC, cond.rhsField)
-        if (base == null) return null
-        rhsV = base * (1 + (parseFloat(cond.rhsPct) || 0) / 100)
+      const rhsBase = cond.rhsField ? getVal(getC(cond.rhsOffset ?? 0), cond.rhsField) : null
+
+      if (cond.rhsMode === 'number')  { rhsV = parseFloat(cond.rhsNum) || 0 }
+      else if (cond.rhsMode === 'field')   { if (rhsBase == null) return null; rhsV = rhsBase }
+      else if (cond.rhsMode === 'mult')    { if (rhsBase == null) return null; rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1) }
+      else if (cond.rhsMode === 'pct')     { if (rhsBase == null) return null; rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100) }
+      else if (cond.rhsMode === 'pctdiff') {
+        if (rhsBase == null || rhsBase === 0) return null
+        const diff = (lhsV / rhsBase - 1) * 100
+        const num  = parseFloat(cond.rhsNum) || 0
+        const op   = OP_SYM[cond.op] || cond.op
+        if (op === '>')  return diff >  num
+        if (op === '>=') return diff >= num
+        if (op === '<')  return diff <  num
+        if (op === '<=') return diff <= num
+        if (op === '==') return Math.abs(diff - num) < 1e-9
+        return Math.abs(diff - num) >= 1e-9
       }
 
-      let pass = false
-      if (cond.op === '>')  pass = lhsV >  rhsV
-      if (cond.op === '>=') pass = lhsV >= rhsV
-      if (cond.op === '<')  pass = lhsV <  rhsV
-      if (cond.op === '<=') pass = lhsV <= rhsV
-      if (cond.op === '==') pass = Math.abs(lhsV - rhsV) < 1e-9
-      if (cond.op === '!=') pass = Math.abs(lhsV - rhsV) >= 1e-9
-
-      if (!pass) return null
+      const op = OP_SYM[cond.op] || cond.op
+      if (op === '>')  return lhsV >  rhsV
+      if (op === '>=') return lhsV >= rhsV
+      if (op === '<')  return lhsV <  rhsV
+      if (op === '<=') return lhsV <= rhsV
+      if (op === '==') return Math.abs(lhsV - rhsV) < 1e-9
+      return Math.abs(lhsV - rhsV) >= 1e-9
     }
 
-    // All conditions passed — build result object like built-in scanners
+    // Fold AND/OR left→right
+    let acc = evalCond(active[0])
+    if (acc == null) return null
+    for (let i = 1; i < active.length; i++) {
+      const r = evalCond(active[i])
+      if (r == null) return null
+      acc = active[i-1].joinNext === 'OR' ? acc || r : acc && r
+    }
+    if (!acc) return null
+
     const curr = candles[len - 1]
     const prev = candles[len - 2] || curr
-    const refLow  = pattern.side === 'bull' ? Math.min(curr.low, prev.low) : null
-    const refHigh = pattern.side === 'bear' ? Math.max(curr.high, prev.high) : null
+    const lo = Math.min(curr.low, prev.low)
+    const hi = Math.max(curr.high, prev.high)
     const gainPct = pattern.side === 'bull'
-      ? ((curr.close - (refLow || curr.low)) / (refLow || curr.low) * 100).toFixed(2)
-      : (((refHigh || curr.high) - curr.close) / curr.close * 100).toFixed(2)
+      ? ((curr.close - lo) / lo * 100).toFixed(2)
+      : ((hi - curr.close) / curr.close * 100).toFixed(2)
 
     return {
-      candleCount: 5,
-      gainPct,
-      highestClose: curr.close,
-      lowestOpen: curr.open,
-      conds: pattern.conditions
-        .filter(c => c.enabled)
-        .map(c => `✓ ${condLabel(c)}`),
+      candleCount: 5, gainPct,
+      highestClose: curr.close, lowestOpen: curr.open,
+      conds: active.map((c, i) => {
+        const pre = i > 0 ? `${active[i-1].joinNext} ` : ''
+        return `✓ ${pre}${condFormula(c)}`
+      }),
       run: candles.slice(len - 8, len),
-      ema9:  curr.ema9,
-      ema20: curr.ema20,
-      rsi:   curr.rsi,
+      ema9: curr.ema9, ema20: curr.ema20, rsi: curr.rsi,
     }
   }
 }
 
-// ── Human-readable label for a condition ─────────────────────────────────────
-function condLabel(cond) {
-  const lhsName = FIELD_MAP[cond.lhsField]?.label || cond.lhsField
-  const lhsOff  = cond.lhsOffset === 0 ? '' : `[${cond.lhsOffset}]`
-  const opStr   = cond.op
-  let rhsStr = ''
-  if (cond.rhsType === 'number') {
-    rhsStr = String(cond.rhsNumber)
-  } else {
-    const rhsName = FIELD_MAP[cond.rhsField]?.label || cond.rhsField
-    const rhsOff  = cond.rhsOffset === 0 ? '' : `[${cond.rhsOffset}]`
-    if (cond.rhsType === 'field') rhsStr = `${rhsName}${rhsOff}`
-    if (cond.rhsType === 'multiply') rhsStr = `${rhsName}${rhsOff} × ${cond.rhsMult}`
-    if (cond.rhsType === 'pct') {
-      const sign = cond.rhsPct >= 0 ? '+' : ''
-      rhsStr = `${rhsName}${rhsOff} ${sign}${cond.rhsPct}%`
-    }
-  }
-  return `${lhsName}${lhsOff} ${opStr} ${rhsStr}`
-}
-
-// ── Tiny styled select ────────────────────────────────────────────────────────
-function Sel({ value, onChange, children, style = {} }) {
+// ── UI primitives ─────────────────────────────────────────────────────────────
+function Pill({ active, color = A, onClick, children, sm }) {
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        background: 'var(--bg3)', border: '1px solid var(--border2)',
-        color: 'var(--text)', borderRadius: 6, padding: '5px 7px',
-        fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
-        ...style,
-      }}
-    >
-      {children}
-    </select>
+    <button onClick={onClick} style={{
+      padding: sm ? '4px 9px' : '6px 12px',
+      borderRadius: 20, cursor: 'pointer',
+      fontSize: sm ? 10 : 11, fontFamily: 'var(--mono)', fontWeight: active ? 800 : 500,
+      border: `1.5px solid ${active ? color : 'var(--border)'}`,
+      background: active ? `${color}1e` : 'transparent',
+      color: active ? color : 'var(--text3)',
+      transition: 'all .12s', whiteSpace: 'nowrap', flexShrink: 0,
+    }}>{children}</button>
   )
 }
 
-// Tiny number input
-function Num({ value, onChange, step = 'any', style = {} }) {
-  return (
-    <input
-      type="number"
-      value={value}
-      step={step}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        background: 'var(--bg3)', border: '1px solid var(--border2)',
-        color: 'var(--text)', borderRadius: 6, padding: '5px 7px',
-        fontSize: 11, fontFamily: 'var(--mono)', width: 80,
-        ...style,
-      }}
-    />
-  )
+function Lbl({ children }) {
+  return <div style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', marginBottom: 5 }}>{children}</div>
 }
 
-// ── Single condition row ──────────────────────────────────────────────────────
-function CondRow({ cond, onChange, onRemove, color }) {
-  function set(key, val) { onChange({ ...cond, [key]: val }) }
-
-  const groups = useMemo(() => {
-    const g = {}
-    CANDLE_FIELDS.forEach(f => { (g[f.group] = g[f.group] || []).push(f) })
-    return g
-  }, [])
-
-  function FieldSel({ value, onChange: onCh }) {
-    return (
-      <Sel value={value} onChange={onCh}>
-        {Object.entries(groups).map(([grp, fields]) => (
+function FSelect({ value, offset, onField, onOffset, color }) {
+  return (
+    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      <select value={value} onChange={e => onField(e.target.value)} style={{
+        background: 'var(--bg3)', border: `1.5px solid ${color}55`,
+        color, borderRadius: 8, padding: '6px 9px',
+        fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 700, cursor: 'pointer',
+      }}>
+        {Object.entries(FIELD_GROUPS).map(([grp, fs]) => (
           <optgroup key={grp} label={grp}>
-            {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            {fs.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
           </optgroup>
         ))}
-      </Sel>
-    )
-  }
-
-  return (
-    <div style={{
-      background: 'rgba(0,0,0,0.18)', borderRadius: 9,
-      border: `1px solid ${cond.enabled ? color + '44' : 'var(--border)'}`,
-      padding: '10px 10px 10px 12px', opacity: cond.enabled ? 1 : 0.45,
-      transition: 'all .15s',
-    }}>
-      {/* Header row: enabled toggle + remove */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          {/* Toggle */}
-          <div
-            onClick={() => set('enabled', !cond.enabled)}
-            style={{
-              width: 30, height: 17, borderRadius: 9, cursor: 'pointer',
-              background: cond.enabled ? color : 'var(--bg3)',
-              border: `1.5px solid ${cond.enabled ? color : 'var(--border)'}`,
-              position: 'relative', transition: 'all .18s', flexShrink: 0,
-            }}
-          >
-            <div style={{
-              position: 'absolute', top: 2, left: cond.enabled ? 14 : 2,
-              width: 10, height: 10, borderRadius: '50%',
-              background: '#fff', transition: 'left .18s',
-            }} />
-          </div>
-          <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em' }}>
-            {cond.enabled ? 'ON' : 'OFF'}
-          </span>
-        </div>
-        <button onClick={onRemove} style={{
-          width: 22, height: 22, borderRadius: 6, border: '1px solid var(--border)',
-          background: 'rgba(255,60,60,0.08)', color: 'var(--red)',
-          cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>×</button>
-      </div>
-
-      {/* LHS */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: 7 }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', minWidth: 26 }}>IF</span>
-        <FieldSel value={cond.lhsField} onChange={v => set('lhsField', v)} />
-        <Sel value={cond.lhsOffset} onChange={v => set('lhsOffset', parseInt(v))}>
-          {CANDLE_OFFSETS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </Sel>
-      </div>
-
-      {/* Operator */}
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 7 }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', minWidth: 26 }}>IS</span>
-        <div style={{ display: 'flex', gap: 3 }}>
-          {OPERATORS.map(op => (
-            <button key={op.id} onClick={() => set('op', op.id)} style={{
-              padding: '4px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
-              fontFamily: 'var(--mono)', fontWeight: 700,
-              border: `1.5px solid ${cond.op === op.id ? color : 'var(--border)'}`,
-              background: cond.op === op.id ? `${color}22` : 'var(--bg2)',
-              color: cond.op === op.id ? color : 'var(--text3)',
-              transition: 'all .12s',
-            }}>{op.label}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* RHS type */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', minWidth: 26 }}>TO</span>
-        <Sel value={cond.rhsType} onChange={v => set('rhsType', v)}>
-          {RHS_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-        </Sel>
-
-        {cond.rhsType === 'number' && (
-          <Num value={cond.rhsNumber} onChange={v => set('rhsNumber', v)} />
-        )}
-
-        {cond.rhsType === 'field' && (<>
-          <FieldSel value={cond.rhsField} onChange={v => set('rhsField', v)} />
-          <Sel value={cond.rhsOffset} onChange={v => set('rhsOffset', parseInt(v))}>
-            {CANDLE_OFFSETS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </Sel>
-        </>)}
-
-        {cond.rhsType === 'multiply' && (<>
-          <FieldSel value={cond.rhsField} onChange={v => set('rhsField', v)} />
-          <Sel value={cond.rhsOffset} onChange={v => set('rhsOffset', parseInt(v))}>
-            {CANDLE_OFFSETS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </Sel>
-          <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>×</span>
-          <Num value={cond.rhsMult} onChange={v => set('rhsMult', v)} step="0.0001" style={{ width: 72 }} />
-        </>)}
-
-        {cond.rhsType === 'pct' && (<>
-          <FieldSel value={cond.rhsField} onChange={v => set('rhsField', v)} />
-          <Sel value={cond.rhsOffset} onChange={v => set('rhsOffset', parseInt(v))}>
-            {CANDLE_OFFSETS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </Sel>
-          <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>+</span>
-          <Num value={cond.rhsPct} onChange={v => set('rhsPct', v)} step="0.1" style={{ width: 65 }} />
-          <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>%</span>
-        </>)}
-      </div>
-
-      {/* Preview label */}
-      <div style={{ marginTop: 8, fontSize: 9, fontFamily: 'var(--mono)', color: color, opacity: 0.75 }}>
-        → {condLabel(cond)}
-      </div>
+      </select>
+      <select value={offset ?? 0} onChange={e => onOffset(parseInt(e.target.value))} style={{
+        background: 'var(--bg3)', border: '1.5px solid var(--border)',
+        color: 'var(--text2)', borderRadius: 8, padding: '6px 8px',
+        fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
+      }}>
+        {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+      </select>
     </div>
   )
 }
 
-// ── Pattern editor panel (one pattern) ───────────────────────────────────────
-const ICONS = ['⭐','💹','📈','📉','🚀','💣','🎯','⚡','🔥','💎','🌊','🧲']
-const TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
+function NInput({ value, onChange, suffix, step = 'any', w = 80 }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <input type="number" value={value ?? 0} step={step}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          width: w, background: 'var(--bg3)', border: '1.5px solid var(--border2)',
+          color: 'var(--text)', borderRadius: 8, padding: '6px 9px',
+          fontSize: 12, fontFamily: 'var(--mono)',
+        }} />
+      {suffix && <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{suffix}</span>}
+    </div>
+  )
+}
 
-function PatternEditor({ pattern, onChange, onDelete, isNew }) {
-  const [collapsed, setCollapsed] = useState(!isNew)
-  const color = pattern.side === 'bull' ? GREEN : RED
+function IBtn({ onClick, title, children, col = 'var(--text3)' }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border)',
+      background: 'var(--bg2)', color: col, cursor: 'pointer',
+      fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--mono)', fontWeight: 700, flexShrink: 0,
+    }}>{children}</button>
+  )
+}
 
-  function set(key, val) { onChange({ ...pattern, [key]: val }) }
+function JoinBadge({ value, onChange }) {
+  const isAnd = value === 'AND'
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, margin: '1px 0' }}>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      <button onClick={() => onChange(isAnd ? 'OR' : 'AND')} style={{
+        padding: '3px 14px', borderRadius: 20, cursor: 'pointer',
+        fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+        border: `1.5px solid ${isAnd ? BLU + '90' : AMB + '90'}`,
+        background: isAnd ? BLU + '18' : AMB + '18',
+        color: isAnd ? BLU : AMB,
+        letterSpacing: '.07em', transition: 'all .15s',
+      }}>{value}</button>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+    </div>
+  )
+}
 
-  function setCond(idx, newCond) {
-    const conds = [...pattern.conditions]
-    conds[idx] = newCond
-    set('conditions', conds)
-  }
-
-  function removeCond(idx) {
-    set('conditions', pattern.conditions.filter((_, i) => i !== idx))
-  }
-
-  function addCond() {
-    set('conditions', [...pattern.conditions, blankCond()])
-  }
-
-  function toggleTf(tf) {
-    const tfs = pattern.tfs.includes(tf)
-      ? pattern.tfs.filter(t => t !== tf)
-      : [...pattern.tfs, tf]
-    set('tfs', tfs)
-  }
-
-  const enabledConds = pattern.conditions.filter(c => c.enabled).length
+// ── Condition card ────────────────────────────────────────────────────────────
+function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown }) {
+  const [open, setOpen] = useState(true)
+  function s(k, v) { onChange({ ...cond, [k]: v }) }
+  const formula = condFormula(cond)
 
   return (
     <div style={{
-      borderRadius: 12,
-      border: `1.5px solid ${pattern.enabled ? color + '55' : 'var(--border)'}`,
-      background: pattern.enabled
-        ? pattern.side === 'bull' ? 'rgba(0,230,118,0.05)' : 'rgba(255,60,80,0.05)'
-        : 'var(--bg2)',
-      opacity: pattern.enabled ? 1 : 0.6,
-      transition: 'all .18s',
+      borderRadius: 10,
+      border: `1.5px solid ${cond.enabled ? color + '50' : 'var(--border)'}`,
+      background: cond.enabled ? `${color}08` : 'rgba(0,0,0,0.1)',
+      opacity: cond.enabled ? 1 : 0.5,
+      transition: 'opacity .15s',
       overflow: 'hidden',
     }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', cursor: 'pointer' }}
-        onClick={() => setCollapsed(c => !c)}>
-        <span style={{ fontSize: 20 }}>{pattern.icon}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: pattern.enabled ? color : 'var(--text2)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {pattern.name}
-          </div>
-          <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
-            {pattern.side.toUpperCase()} · {enabledConds} condition{enabledConds !== 1 ? 's' : ''} · {pattern.tfs.join(', ') || 'no TF'}
-          </div>
+      {/* Topbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '7px 9px', background: 'rgba(0,0,0,0.2)',
+      }}>
+        {/* Enable dot */}
+        <div onClick={() => s('enabled', !cond.enabled)} style={{
+          width: 11, height: 11, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+          background: cond.enabled ? color : 'var(--border)',
+          boxShadow: cond.enabled ? `0 0 7px ${color}` : 'none',
+          transition: 'all .15s',
+        }} />
+
+        {/* Formula — tap to expand */}
+        <div onClick={() => setOpen(o => !o)} style={{
+          flex: 1, fontFamily: 'var(--mono)', fontWeight: 700,
+          fontSize: 11, color: cond.enabled ? color : 'var(--text3)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          cursor: 'pointer',
+        }}>
+          {formula}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }} onClick={e => e.stopPropagation()}>
-          {/* Enable toggle */}
-          <div onClick={() => set('enabled', !pattern.enabled)} style={{
-            width: 34, height: 19, borderRadius: 10, cursor: 'pointer',
-            background: pattern.enabled ? color : 'var(--bg3)',
-            border: `1.5px solid ${pattern.enabled ? color : 'var(--border)'}`,
-            position: 'relative', transition: 'all .2s', flexShrink: 0,
-          }}>
-            <div style={{
-              position: 'absolute', top: 2.5, left: pattern.enabled ? 16 : 2.5,
-              width: 11, height: 11, borderRadius: '50%',
-              background: '#fff', transition: 'left .2s',
-            }} />
-          </div>
-          {/* Delete */}
-          <button onClick={onDelete} style={{
-            width: 26, height: 26, borderRadius: 7,
-            border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.08)',
-            color: 'var(--red)', cursor: 'pointer', fontSize: 13,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>🗑</button>
+
+        {/* Action icons */}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {idx > 0        && <IBtn onClick={onMoveUp}   title="Move up">↑</IBtn>}
+          {idx < total-1  && <IBtn onClick={onMoveDown} title="Move down">↓</IBtn>}
+          <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
+          <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
         </div>
-        <span style={{ color: 'var(--text3)', fontSize: 11, flexShrink: 0, marginLeft: 2 }}>
-          {collapsed ? '▼' : '▲'}
+        <span onClick={() => setOpen(o => !o)} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
+          {open ? '▲' : '▼'}
         </span>
       </div>
 
       {/* Body */}
-      {!collapsed && (
-        <div style={{ borderTop: '1px solid var(--border)', padding: '13px' }}>
+      {open && (
+        <div style={{ padding: '10px 11px 12px', display: 'flex', flexDirection: 'column', gap: 11 }}>
 
-          {/* Name + icon + side */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 13 }}>
-            {/* Icon picker */}
-            <div>
-              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 4, fontWeight: 700 }}>ICON</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                {ICONS.map(ic => (
-                  <button key={ic} onClick={() => set('icon', ic)} style={{
-                    width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14,
-                    border: `1.5px solid ${pattern.icon === ic ? color : 'var(--border)'}`,
-                    background: pattern.icon === ic ? `${color}18` : 'var(--bg2)',
-                  }}>{ic}</button>
-                ))}
-              </div>
-            </div>
+          {/* LEFT SIDE */}
+          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+            <Lbl>LEFT — candle field</Lbl>
+            <FSelect
+              value={cond.lhsField} offset={cond.lhsOffset}
+              onField={v => s('lhsField', v)} onOffset={v => s('lhsOffset', v)}
+              color={color}
+            />
+          </div>
 
-            {/* Name */}
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 4, fontWeight: 700 }}>NAME</div>
-              <input
-                value={pattern.name}
-                onChange={e => set('name', e.target.value)}
-                style={{
-                  background: 'var(--bg3)', border: '1px solid var(--border2)',
-                  color: 'var(--text)', borderRadius: 7, padding: '7px 10px',
-                  fontSize: 13, fontWeight: 700, width: '100%', boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            {/* Side */}
-            <div>
-              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 4, fontWeight: 700 }}>DIRECTION</div>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {['bull', 'bear'].map(s => (
-                  <button key={s} onClick={() => set('side', s)} style={{
-                    padding: '6px 14px', borderRadius: 7, cursor: 'pointer',
-                    fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 700,
-                    border: `1.5px solid ${pattern.side === s ? (s === 'bull' ? GREEN : RED) : 'var(--border)'}`,
-                    background: pattern.side === s ? (s === 'bull' ? 'rgba(0,230,118,0.12)' : 'rgba(255,60,80,0.12)') : 'var(--bg2)',
-                    color: pattern.side === s ? (s === 'bull' ? GREEN : RED) : 'var(--text3)',
-                  }}>{s === 'bull' ? '🟢 BULL' : '🔴 BEAR'}</button>
-                ))}
-              </div>
+          {/* OPERATOR */}
+          <div>
+            <Lbl>OPERATOR</Lbl>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {OPS.map(op => (
+                <Pill key={op} active={cond.op === op} color={color} onClick={() => s('op', op)}>{op}</Pill>
+              ))}
             </div>
           </div>
 
-          {/* Timeframes */}
-          <div style={{ marginBottom: 13 }}>
-            <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 6, fontWeight: 700 }}>SCAN ON TIMEFRAMES</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {TF_LIST.map(tf => {
-                const on = pattern.tfs.includes(tf)
-                return (
-                  <button key={tf} onClick={() => toggleTf(tf)} style={{
-                    padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-                    fontSize: 10, fontFamily: 'var(--mono)', fontWeight: on ? 800 : 500,
-                    border: `1.5px solid ${on ? color : 'var(--border)'}`,
-                    background: on ? `${color}18` : 'var(--bg2)',
-                    color: on ? color : 'var(--text3)',
-                    transition: 'all .12s',
-                  }}>{tf}</button>
-                )
-              })}
+          {/* RIGHT SIDE — mode select */}
+          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+            <Lbl>RIGHT — compare to</Lbl>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 9 }}>
+              {RHS_MODES.map(m => (
+                <Pill key={m.id} active={cond.rhsMode === m.id} color={color}
+                  onClick={() => s('rhsMode', m.id)} sm>{m.label}</Pill>
+              ))}
             </div>
-            {pattern.tfs.length === 0 && (
-              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--red)', marginTop: 4 }}>
-                ⚠ No TF selected — pattern won't scan
+
+            {/* hint */}
+            <div style={{ fontSize: 9, fontFamily:'var(--mono)', color:'var(--text3)', marginBottom: 8, opacity:.75 }}>
+              {RHS_MODES.find(m => m.id === cond.rhsMode)?.hint}
+            </div>
+
+            {/* Value inputs per mode */}
+            {cond.rhsMode === 'number' && (
+              <NInput value={cond.rhsNum} onChange={v => s('rhsNum', v)} />
+            )}
+
+            {cond.rhsMode === 'field' && (
+              <FSelect
+                value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
+                onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
+                color={color}
+              />
+            )}
+
+            {cond.rhsMode === 'mult' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <FSelect
+                  value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
+                  onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
+                  color={color}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ fontFamily:'var(--mono)', color:'var(--text3)', fontSize:13 }}>×</span>
+                  <NInput value={cond.rhsMult ?? 1} onChange={v => s('rhsMult', v)} step="0.0001" />
+                  <span style={{ fontSize:9, color:'var(--text3)', fontFamily:'var(--mono)' }}>1.5 = ×1.5 · 1.005 = +0.5%</span>
+                </div>
+              </div>
+            )}
+
+            {cond.rhsMode === 'pct' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <FSelect
+                  value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
+                  onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
+                  color={color}
+                />
+                <NInput value={cond.rhsPct ?? 0} onChange={v => s('rhsPct', v)} step="0.01" suffix="%" />
+              </div>
+            )}
+
+            {cond.rhsMode === 'pctdiff' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <FSelect
+                  value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
+                  onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
+                  color={color}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)' }}>{cond.op}</span>
+                  <NInput value={cond.rhsNum ?? 0} onChange={v => s('rhsNum', v)} step="0.01" suffix="%" />
+                </div>
+                <div style={{ fontSize:9, fontFamily:'var(--mono)', color:'var(--text3)' }}>
+                  (Left / Right − 1) × 100 {cond.op} {cond.rhsNum ?? 0}%
+                </div>
               </div>
             )}
           </div>
 
-          {/* Conditions */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', fontWeight: 700 }}>
-                CONDITIONS (all must pass)
-              </div>
-              <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>
-                {enabledConds} active
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              {pattern.conditions.map((cond, idx) => (
-                <CondRow
-                  key={cond.id}
-                  cond={cond}
-                  color={color}
-                  onChange={c => setCond(idx, c)}
-                  onRemove={() => removeCond(idx)}
-                />
-              ))}
-            </div>
-
-            <button onClick={addCond} style={{
-              marginTop: 8, width: '100%', padding: '8px',
-              borderRadius: 7, cursor: 'pointer', fontSize: 11,
-              fontFamily: 'var(--mono)', fontWeight: 700,
-              border: `1.5px dashed ${color}55`,
-              background: `${color}08`,
-              color: color,
-              transition: 'all .15s',
-            }}>
-              + Add Condition
-            </button>
+          {/* Live formula */}
+          <div style={{
+            fontSize: 10, fontFamily: 'var(--mono)', color: color,
+            padding: '5px 9px', borderRadius: 6,
+            background: `${color}10`, border: `1px solid ${color}30`,
+          }}>
+            → {formula}
           </div>
         </div>
       )}
@@ -559,106 +431,245 @@ function PatternEditor({ pattern, onChange, onDelete, isNew }) {
   )
 }
 
-// ── Main Pattern Builder Tab ──────────────────────────────────────────────────
+// ── Pattern editor ────────────────────────────────────────────────────────────
+function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
+  const [open, setOpen] = useState(!!defaultOpen)
+  const color = pattern.side === 'bull' ? G : R
+
+  function s(k, v) { onChange({ ...pattern, [k]: v }) }
+  function setCond(i, c) { const cs = [...pattern.conditions]; cs[i] = c; s('conditions', cs) }
+  function delCond(i)    { s('conditions', pattern.conditions.filter((_,j) => j !== i)) }
+  function copyCond(i)   {
+    const cs = [...pattern.conditions]
+    cs.splice(i + 1, 0, { ...cs[i], id: uid() })
+    s('conditions', cs)
+  }
+  function moveCond(from, to) {
+    const cs = [...pattern.conditions]
+    const [item] = cs.splice(from, 1); cs.splice(to, 0, item)
+    s('conditions', cs)
+  }
+  function setJoin(i, v) { setCond(i, { ...pattern.conditions[i], joinNext: v }) }
+  function toggleTf(tf)  { s('tfs', pattern.tfs.includes(tf) ? pattern.tfs.filter(t => t !== tf) : [...pattern.tfs, tf]) }
+
+  const active = pattern.conditions.filter(c => c.enabled).length
+
+  return (
+    <div style={{
+      borderRadius: 13,
+      border: `1.5px solid ${pattern.enabled ? color + '55' : 'var(--border)'}`,
+      background: 'var(--bg1)', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 9, padding: '12px 13px', cursor: 'pointer',
+          background: pattern.enabled
+            ? pattern.side === 'bull' ? 'rgba(0,230,118,0.07)' : 'rgba(255,60,80,0.07)'
+            : 'transparent',
+        }}
+      >
+        <span style={{ fontSize: 22 }}>{pattern.icon}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: pattern.enabled ? color : 'var(--text2)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pattern.name}</div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 3 }}>
+            {pattern.side.toUpperCase()} · {active} cond{active !== 1 ? 's' : ''} · {pattern.tfs.join(' ') || 'no TF'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+          <div onClick={() => s('enabled', !pattern.enabled)} style={{
+            width: 36, height: 20, borderRadius: 10, cursor: 'pointer', flexShrink: 0,
+            background: pattern.enabled ? color : 'var(--bg3)',
+            border: `1.5px solid ${pattern.enabled ? color : 'var(--border)'}`,
+            position: 'relative', transition: 'all .2s',
+          }}>
+            <div style={{
+              position: 'absolute', top: 3, left: pattern.enabled ? 17 : 3,
+              width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
+            }} />
+          </div>
+          <button onClick={onDelete} style={{
+            width: 28, height: 28, borderRadius: 7,
+            border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
+            color: 'var(--red)', cursor: 'pointer', fontSize: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>🗑</button>
+        </div>
+        <span style={{ color: 'var(--text3)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
+      </div>
+
+      {/* Body */}
+      {open && (
+        <div style={{ borderTop: '1px solid var(--border)', padding: '13px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+
+          {/* Name + icon */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <Lbl>ICON</Lbl>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {ICONS.map(ic => (
+                  <button key={ic} onClick={() => s('icon', ic)} style={{
+                    width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16,
+                    border: `1.5px solid ${pattern.icon === ic ? color : 'var(--border)'}`,
+                    background: pattern.icon === ic ? `${color}22` : 'var(--bg2)',
+                  }}>{ic}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <Lbl>NAME</Lbl>
+              <input value={pattern.name} onChange={e => s('name', e.target.value)} style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--bg3)', border: '1.5px solid var(--border2)',
+                color: 'var(--text)', borderRadius: 8, padding: '8px 10px',
+                fontSize: 13, fontWeight: 700,
+              }} />
+            </div>
+          </div>
+
+          {/* Side + TF */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <div>
+              <Lbl>DIRECTION</Lbl>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {['bull','bear'].map(sd => (
+                  <Pill key={sd} active={pattern.side === sd} color={sd === 'bull' ? G : R}
+                    onClick={() => s('side', sd)}>{sd === 'bull' ? '🟢 Bull' : '🔴 Bear'}</Pill>
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Lbl>SCAN ON TIMEFRAMES</Lbl>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {TF_LIST.map(tf => (
+                  <Pill key={tf} active={pattern.tfs.includes(tf)} color={color}
+                    onClick={() => toggleTf(tf)} sm>{tf}</Pill>
+                ))}
+              </div>
+              {pattern.tfs.length === 0 && (
+                <div style={{ fontSize: 9, color: 'var(--red)', fontFamily: 'var(--mono)', marginTop: 4 }}>⚠ No TF — won't scan</div>
+              )}
+            </div>
+          </div>
+
+          {/* Conditions */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Lbl>CONDITIONS</Lbl>
+              <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>
+                {active} active · all must pass (per AND/OR)
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {pattern.conditions.map((cond, idx) => (
+                <React.Fragment key={cond.id}>
+                  <CondCard
+                    cond={cond} idx={idx} total={pattern.conditions.length} color={color}
+                    onChange={c => setCond(idx, c)}
+                    onRemove={() => delCond(idx)}
+                    onCopy={() => copyCond(idx)}
+                    onMoveUp={() => moveCond(idx, idx - 1)}
+                    onMoveDown={() => moveCond(idx, idx + 1)}
+                  />
+                  {idx < pattern.conditions.length - 1 && (
+                    <JoinBadge value={cond.joinNext || 'AND'} onChange={v => setJoin(idx, v)} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            <button
+              onClick={() => s('conditions', [...pattern.conditions, blankCond()])}
+              style={{
+                marginTop: 8, width: '100%', padding: '9px',
+                borderRadius: 8, cursor: 'pointer', fontSize: 12,
+                fontFamily: 'var(--mono)', fontWeight: 700,
+                border: `1.5px dashed ${color}55`,
+                background: `${color}08`, color,
+              }}
+            >+ Add Condition</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main tab ──────────────────────────────────────────────────────────────────
 export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
   const [newId, setNewId] = useState(null)
 
-  function savePatterns(ps) {
-    update({ customPatterns: ps })
-  }
+  function save(ps) { update({ customPatterns: ps }) }
+  function add()     { const p = blankPattern(); setNewId(p.id); save([...patterns, p]) }
+  function upd(i, p) { const ps = [...patterns]; ps[i] = p; save(ps) }
+  function del(i)    { save(patterns.filter((_, j) => j !== i)) }
 
-  function addPattern() {
-    const p = blankPattern()
-    setNewId(p.id)
-    savePatterns([...patterns, p])
-  }
-
-  function updatePattern(idx, p) {
-    const ps = [...patterns]
-    ps[idx] = p
-    savePatterns(ps)
-  }
-
-  function deletePattern(idx) {
-    savePatterns(patterns.filter((_, i) => i !== idx))
-  }
-
-  const bullCount = patterns.filter(p => p.side === 'bull' && p.enabled).length
-  const bearCount = patterns.filter(p => p.side === 'bear' && p.enabled).length
+  const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
+  const bear = patterns.filter(p => p.side === 'bear' && p.enabled).length
 
   return (
-    <div style={{ padding: '16px 12px 80px', maxWidth: 680, margin: '0 auto' }}>
+    <div style={{ padding: '14px 10px 90px', maxWidth: 620, margin: '0 auto' }}>
+
       {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.02em' }}>🔧 Pattern Builder</div>
-            <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 3 }}>
-              Build custom scan patterns with visual conditions
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
-              padding: '3px 8px', borderRadius: 5,
-              background: 'rgba(0,230,118,0.1)', color: GREEN,
-              border: '1px solid rgba(0,230,118,0.3)' }}>🟢 {bullCount}</span>
-            <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
-              padding: '3px 8px', borderRadius: 5,
-              background: 'rgba(255,60,80,0.1)', color: RED,
-              border: '1px solid rgba(255,60,80,0.3)' }}>🔴 {bearCount}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 17 }}>🔧 Pattern Builder</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+            Visual condition editor · live on every scan
           </div>
         </div>
-
-        {/* Info card */}
-        <div style={{
-          padding: '10px 12px', borderRadius: 9,
-          background: 'rgba(150,100,255,0.07)', border: '1px solid rgba(150,100,255,0.25)',
-          fontSize: 10, fontFamily: 'var(--mono)', color: ACCENT, lineHeight: 1.6,
-        }}>
-          Each pattern runs all enabled conditions on every scanned candle. All must pass for a signal.<br/>
-          Use <b>Candle Field × Mult</b> for EMA buffer (e.g. EMA20 × 1.001), or <b>Field + %</b> for slope checks.
+        <div style={{ display: 'flex', gap: 5 }}>
+          <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700, padding: '3px 9px', borderRadius: 6,
+            background: 'rgba(0,230,118,0.1)', color: G, border: '1px solid rgba(0,230,118,0.3)' }}>🟢 {bull}</span>
+          <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700, padding: '3px 9px', borderRadius: 6,
+            background: 'rgba(255,60,80,0.1)', color: R, border: '1px solid rgba(255,60,80,0.3)' }}>🔴 {bear}</span>
         </div>
       </div>
 
-      {/* Pattern list */}
+      {/* Quick reference */}
+      <div style={{
+        marginBottom: 12, padding: '9px 12px', borderRadius: 9,
+        background: 'rgba(179,136,255,0.07)', border: '1px solid rgba(179,136,255,0.22)',
+        fontSize: 10, fontFamily: 'var(--mono)', color: A, lineHeight: 1.75,
+      }}>
+        <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
+        <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
+        <b>% Diff</b>: how many % LHS is above/below RHS<br/>
+        Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
+      </div>
+
+      {/* List */}
       {patterns.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)',
-          fontFamily: 'var(--mono)', fontSize: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🔬</div>
-          No custom patterns yet.<br/>
-          <span style={{ fontSize: 10 }}>Tap "New Pattern" below to create your first.</span>
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🔬</div>
+          <div style={{ fontSize: 13 }}>No custom patterns yet</div>
+          <div style={{ fontSize: 10, marginTop: 5, opacity: .7 }}>Tap + New Pattern to start</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-          {patterns.map((p, idx) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
+          {patterns.map((p, i) => (
             <PatternEditor
-              key={p.id}
-              pattern={p}
-              isNew={p.id === newId}
-              onChange={np => updatePattern(idx, np)}
-              onDelete={() => deletePattern(idx)}
+              key={p.id} pattern={p} defaultOpen={p.id === newId}
+              onChange={np => upd(i, np)} onDelete={() => del(i)}
             />
           ))}
         </div>
       )}
 
       {/* Add button */}
-      <button onClick={addPattern} style={{
-        width: '100%', padding: '13px',
-        borderRadius: 10, cursor: 'pointer', fontSize: 13,
-        fontFamily: 'var(--mono)', fontWeight: 800,
-        border: '2px dashed rgba(150,100,255,0.45)',
-        background: 'rgba(150,100,255,0.07)',
-        color: ACCENT,
-        transition: 'all .15s',
-        letterSpacing: '.03em',
+      <button onClick={add} style={{
+        width: '100%', padding: '13px', borderRadius: 10, cursor: 'pointer',
+        fontSize: 13, fontFamily: 'var(--mono)', fontWeight: 800,
+        border: '2px dashed rgba(179,136,255,0.4)',
+        background: 'rgba(179,136,255,0.06)', color: A,
       }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(150,100,255,0.8)'; e.currentTarget.style.background = 'rgba(150,100,255,0.13)' }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(150,100,255,0.45)'; e.currentTarget.style.background = 'rgba(150,100,255,0.07)' }}
-      >
-        + New Pattern
-      </button>
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(179,136,255,0.13)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(179,136,255,0.06)'}
+      >+ New Pattern</button>
     </div>
   )
 }
