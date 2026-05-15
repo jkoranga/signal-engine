@@ -7,6 +7,7 @@ import {
   TOP_SYMBOLS, intervalToMs, playBeep,
   sendTelegram, buildTelegramMsg, fmt, timeSince, fmtVol,
 } from '../utils/scanner.js'
+import { compilePattern } from './PatternBuilder.jsx'
 
 // ── TradingView link ──────────────────────────────────────
 const TF_MAP = {'1m':'1','3m':'3','5m':'5','15m':'15','30m':'30','1h':'60','4h':'240','1d':'D','1D':'D'}
@@ -330,7 +331,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
 
   const activeScanners = useMemo(() => {
     const patternTfs = settings.patternTfs || {}
-    return ALL_SCANNERS.filter(s => {
+    const builtIn = ALL_SCANNERS.filter(s => {
       if (!scannerEnabled[s.id]) return false
       if (scanMode !== 'all' && scanMode !== 'single' && scanMode !== 'custom' && s.side !== scanMode) return false
       // If user has explicitly saved a patternTfs config for this scanner, respect it.
@@ -343,7 +344,27 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
       // (scanner.tfs is only a UI hint for the Settings panel, not a runtime filter)
       return true
     })
-  }, [scannerEnabled, scanMode, settings.patternTfs, timeframe])
+
+    // Custom patterns from Pattern Builder
+    const custom = (settings.customPatterns || [])
+      .filter(p => p.enabled && p.tfs.includes(timeframe) && p.conditions.some(c => c.enabled))
+      .filter(p => scanMode === 'all' || p.side === scanMode)
+      .map(p => ({
+        id:   p.id,
+        name: p.name,
+        side: p.side,
+        icon: p.icon,
+        conditions: p.conditions.filter(c => c.enabled).map(c => {
+          const { compilePattern: _, ...rest } = c
+          return rest
+        }),
+        group: 'custom',
+        tfs:   p.tfs,
+        logic: compilePattern(p),
+      }))
+
+    return [...builtIn, ...custom]
+  }, [scannerEnabled, scanMode, settings.patternTfs, settings.customPatterns, timeframe])
 
   useEffect(() => { scannersRef.current = activeScanners }, [activeScanners])
 

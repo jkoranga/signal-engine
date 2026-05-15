@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, Component } from 'react'
 import { useSettings } from './hooks/useSettings.js'
 import TFScannerTab from './components/TFScannerTab.jsx'
 import SettingsTab from './components/SettingsTab.jsx'
+import PatternBuilderTab from './components/PatternBuilder.jsx'
 import { onAuthChanged, checkConfigured } from './firebase.js'
 import { ALL_SCANNERS, TF_META } from './utils/scanners.js'
 import { getPatternTfs } from './components/SettingsTab.jsx'
@@ -16,6 +17,7 @@ export const TF_TABS = [
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
+  { id: 'builder',  label: '🔧', color: '#b388ff', glow: 'rgba(179,136,255,0.3)', isBuilder: true },
   { id: 'settings', label: 'settings', color: '#00b8d9', glow: 'rgba(0,184,217,0.3)', isSettings: true },
 ]
 
@@ -691,7 +693,7 @@ export default function App() {
       </header>
 
       <main className="content-scroll-v2">
-        {TF_TABS.filter(t => !t.isSettings).map(tab => (
+        {TF_TABS.filter(t => !t.isSettings && !t.isBuilder).map(tab => (
           <div key={tab.id} style={{ display: activeTab===tab.id?'block':'none', height:'100%' }}>
             <ErrorBoundary>
               <TFScannerTab
@@ -715,12 +717,17 @@ export default function App() {
               cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} />
           </ErrorBoundary>
         )}
+        {activeTab === 'builder' && (
+          <ErrorBoundary>
+            <PatternBuilderTab settings={settings} update={update} />
+          </ErrorBoundary>
+        )}
       </main>
 
       <nav className="bottom-nav-v2">
         {TF_TABS.map(tab => {
           const isActive = activeTab === tab.id
-          const count = !tab.isSettings ? (alertCounts[tab.id] || 0) : 0
+          const count = (!tab.isSettings && !tab.isBuilder) ? (alertCounts[tab.id] || 0) : 0
           return (
             <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}`} onClick={() => navigateTo(tab.id)}
               style={{ color: isActive?tab.color:'var(--text3)',
@@ -732,6 +739,8 @@ export default function App() {
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
+              ) : tab.isBuilder ? (
+                <span style={{ fontSize: 18 }}>🔧</span>
               ) : (
                 <span className="bottom-tab-label">{tab.label}</span>
               )}
