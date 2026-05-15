@@ -30,14 +30,22 @@ function TvIcon({ symbol, timeframe, sz=26 }) {
 
 // ── Pattern colors ─────────────────────────────────────────
 const PC = {
-  ema_base_rev_bull_v2:   {bg:'rgba(0,230,118,0.11)',   bd:'rgba(0,210,80,0.65)',     tx:'#00e676'},
-  ema_base_rev_bear_v2:   {bg:'rgba(255,50,80,0.10)',   bd:'rgba(255,50,80,0.60)',    tx:'#ff3250'},
-  ema20_reversal_bull:    {bg:'rgba(0,230,118,0.10)',   bd:'rgba(0,200,100,0.60)',    tx:'#00e676'},
-  ema20_reversal_bear:    {bg:'rgba(255,80,100,0.10)',  bd:'rgba(255,60,80,0.58)',    tx:'#ff5060'},
-  bullish_trend_reversal: {bg:'rgba(0,255,180,0.10)',   bd:'rgba(0,220,160,0.65)',    tx:'#00ffb3'},
-  bearish_trend_reversal: {bg:'rgba(255,80,180,0.10)',  bd:'rgba(255,60,160,0.60)',   tx:'#ff50b0'},
+  ema_base_rev_bull_v2:      {bg:'rgba(0,230,118,0.11)',   bd:'rgba(0,210,80,0.65)',     tx:'#00e676'},
+  ema_base_rev_bear_v2:      {bg:'rgba(255,50,80,0.10)',   bd:'rgba(255,50,80,0.60)',    tx:'#ff3250'},
+  ema20_reversal_bull:       {bg:'rgba(0,230,118,0.10)',   bd:'rgba(0,200,100,0.60)',    tx:'#00e676'},
+  ema20_reversal_bear:       {bg:'rgba(255,80,100,0.10)',  bd:'rgba(255,60,80,0.58)',    tx:'#ff5060'},
+  bullish_trend_reversal:    {bg:'rgba(0,255,180,0.10)',   bd:'rgba(0,220,160,0.65)',    tx:'#00ffb3'},
+  bearish_trend_reversal:    {bg:'rgba(255,80,180,0.10)',  bd:'rgba(255,60,160,0.60)',   tx:'#ff50b0'},
+  ema_slope_reversal_bull:   {bg:'rgba(0,230,118,0.10)',   bd:'rgba(0,210,80,0.60)',     tx:'#00e676'},
+  ema_slope_reversal_bear:   {bg:'rgba(255,50,80,0.10)',   bd:'rgba(255,50,80,0.60)',    tx:'#ff3250'},
+  buy_signal_3m:             {bg:'rgba(0,230,118,0.10)',   bd:'rgba(0,200,100,0.60)',    tx:'#00e676'},
+  sell_signal_3m:            {bg:'rgba(255,50,80,0.10)',   bd:'rgba(255,50,80,0.60)',    tx:'#ff3250'},
+  ema16_dip_buy_3m:          {bg:'rgba(0,255,180,0.10)',   bd:'rgba(0,220,160,0.60)',    tx:'#00ffb3'},
+  ema16_dip_sell_3m:         {bg:'rgba(255,80,180,0.10)',  bd:'rgba(255,60,160,0.60)',   tx:'#ff50b0'},
 }
-const gPC = id => PC[id] || {bg:'var(--bg2)',bd:'var(--border)',tx:'var(--text)'}
+const BULL_PC = {bg:'rgba(0,230,118,0.10)', bd:'rgba(0,210,80,0.60)',  tx:'#00e676'}
+const BEAR_PC = {bg:'rgba(255,50,80,0.10)', bd:'rgba(255,50,80,0.60)', tx:'#ff3250'}
+const gPC = (id, side) => PC[id] || (side === 'bear' ? BEAR_PC : BULL_PC)
 
 // ── Dedup / volume options ─────────────────────────────────
 const DEDUP_OPTIONS = [['1m','1m'],['3m','3m'],['5m','5m'],['15m','15m'],['30m','30m'],['1h','1h'],['4h','4h'],['1d','Daily']]
@@ -65,7 +73,7 @@ function Countdown({ nextAt }) {
 // ── Alert result card ─────────────────────────────────────
 function AlertCard({ alert, onDismiss, onTap, resultFilter }) {
   const isBull = alert.side==='bull'
-  const pc = gPC(alert.scannerId)
+  const pc = gPC(alert.scannerId, alert.side)
   if (resultFilter === 'bull' && !isBull) return null
   if (resultFilter === 'bear' && isBull) return null
   return (
@@ -118,7 +126,7 @@ function AlertCard({ alert, onDismiss, onTap, resultFilter }) {
 // ── List row ──────────────────────────────────────────────
 function ScanListItem({ alert, onDismiss, onTap, resultFilter }) {
   const isBull = alert.side==='bull'
-  const pc = gPC(alert.scannerId)
+  const pc = gPC(alert.scannerId, alert.side)
   if (resultFilter==='bull'&&!isBull) return null
   if (resultFilter==='bear'&&isBull) return null
   return (
@@ -155,7 +163,7 @@ function DetailSheet({ alert, onClose }) {
   }, [onClose])
   if (!alert) return null
   const isBull = alert.side==='bull'
-  const pc = gPC(alert.scannerId)
+  const pc = gPC(alert.scannerId, alert.side)
   return (
     <div className="detail-overlay open">
       <div className="detail-backdrop" onClick={onClose}/>
