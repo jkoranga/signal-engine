@@ -333,7 +333,6 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           cursor: 'pointer',
         }}>
-          {cond.label ? <span style={{ color: color, opacity: .85 }}>[{cond.label}] </span> : null}
           {formula}
         </div>
 
@@ -351,26 +350,10 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
 
       {/* Body */}
       {open && (
-        <div style={{ padding: '10px 11px 12px', display: 'flex', flexDirection: 'column', gap: 11 }}>
-
-          {/* LABEL / ALERT NAME */}
-          <div style={{ padding: '8px 10px', borderRadius: 8, background: `${color}12`, border: `1px solid ${color}30` }}>
-            <Lbl>CONDITION LABEL / ALERT NAME</Lbl>
-            <input
-              value={cond.label || ''}
-              onChange={e => s('label', e.target.value)}
-              placeholder="e.g. EMA crossover (shows in alert)"
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: 'var(--bg3)', border: `1.5px solid ${color}40`,
-                color: 'var(--text)', borderRadius: 7, padding: '6px 9px',
-                fontSize: 12, fontFamily: 'var(--mono)',
-              }}
-            />
-          </div>
+        <div style={{ padding: '8px 9px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
 
           {/* LEFT SIDE */}
-          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 7, background: 'rgba(0,0,0,0.18)' }}>
             <Lbl>LEFT — candle field</Lbl>
             <FSelect
               value={cond.lhsField} offset={cond.lhsOffset}
@@ -390,7 +373,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           </div>
 
           {/* RIGHT SIDE — mode select */}
-          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 7, background: 'rgba(0,0,0,0.18)' }}>
             <Lbl>RIGHT — compare to</Lbl>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 9 }}>
               {RHS_MODES.map(m => (
