@@ -38,6 +38,12 @@ const RHS_MODES = [
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
 ]
 
+// Range-check modes — condition applied to every candle in a window
+const RANGE_MODES = [
+  { id: 'all', label: 'ALL candles pass' },
+  { id: 'any', label: 'ANY candle passes' },
+]
+
 const OFFSETS = Array.from({ length: 11 }, (_, i) =>
   i === 0 ? { v: 0, label: '[0] Current' } : { v: -i, label: `[-${i}] Prev ${i}` }
 )
@@ -82,9 +88,29 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ── Formula label ─────────────────────────────────────────────────────────────
 export function condFormula(c) {
   const lhsF = FIELD_MAP[c.lhsField]?.short || c.lhsField
+  const op   = c.op
+
+  // Range mode: prefix with "ALL/ANY [from..to]"
+  if (c.rangeCheck) {
+    const from = c.rangeFrom ?? -1
+    const to   = c.rangeTo   ?? -5
+    const modeLabel = c.rangeMode === 'any' ? 'ANY' : 'ALL'
+    const windowLabel = `${modeLabel}[${from}→${to}]`
+    const rhsF = FIELD_MAP[c.rhsField]?.short || (c.rhsField || '?')
+    if (c.rhsMode === 'number')  return `${windowLabel} ${lhsF} ${op} ${c.rhsNum ?? 0}`
+    const rhs = rhsF
+    if (c.rhsMode === 'field')   return `${windowLabel} ${lhsF} ${op} ${rhs}`
+    if (c.rhsMode === 'mult')    return `${windowLabel} ${lhsF} ${op} ${rhs} × ${c.rhsMult ?? 1}`
+    if (c.rhsMode === 'pct') {
+      const s = (c.rhsPct ?? 0) >= 0 ? '+' : ''
+      return `${windowLabel} ${lhsF} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
+    }
+    if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+    return `${windowLabel} ${lhsF} ${op} ?`
+  }
+
   const lhsO = c.lhsOffset === 0 ? '' : `[${c.lhsOffset}]`
   const lhs  = `${lhsF}${lhsO}`
-  const op   = c.op
 
   if (c.rhsMode === 'number')  return `${lhs} ${op} ${c.rhsNum ?? 0}`
 
@@ -111,6 +137,11 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
+    // Range check (applies condition to every candle in a window)
+    rangeCheck: false,
+    rangeFrom: -1,   // start offset (most recent), e.g. -1
+    rangeTo: -5,     // end offset (oldest), e.g. -5
+    rangeMode: 'all', // 'all' | 'any'
   }
 }
 
@@ -147,6 +178,63 @@ export function compilePattern(pattern) {
     if (!active.length) return null
 
     function evalCond(cond) {
+      // ── Range check: apply condition to every candle in [rangeFrom..rangeTo] ──
+      if (cond.rangeCheck) {
+        const from = Math.min(cond.rangeFrom ?? -1, 0)   // e.g. -1 (most recent)
+        const to   = Math.min(cond.rangeTo   ?? -5, 0)   // e.g. -5 (oldest)
+        const start = Math.min(from, to)
+        const end   = Math.max(from, to)
+        const results = []
+        for (let off = start; off <= end; off++) {
+          // Evaluate lhs at this offset, rhs at same offset (field-relative) or fixed
+          const lhsCandle = getC(off)
+          if (!lhsCandle) continue
+          const lhsV = getVal(lhsCandle, cond.lhsField)
+          if (lhsV == null) continue
+
+          let rhsV
+          if (cond.rhsMode === 'number') {
+            rhsV = parseFloat(cond.rhsNum) || 0
+          } else {
+            // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
+            const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
+            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField)
+            if (rhsBase == null) continue
+            if (cond.rhsMode === 'field')   rhsV = rhsBase
+            else if (cond.rhsMode === 'mult')  rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1)
+            else if (cond.rhsMode === 'pct')   rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100)
+            else if (cond.rhsMode === 'pctdiff') {
+              if (rhsBase === 0) continue
+              const diff = (lhsV / rhsBase - 1) * 100
+              const num  = parseFloat(cond.rhsNum) || 0
+              const op   = OP_SYM[cond.op] || cond.op
+              let r
+              if (op === '>')  r = diff >  num
+              else if (op === '>=') r = diff >= num
+              else if (op === '<')  r = diff <  num
+              else if (op === '<=') r = diff <= num
+              else if (op === '==') r = Math.abs(diff - num) < 1e-9
+              else r = Math.abs(diff - num) >= 1e-9
+              results.push(r)
+              continue
+            } else { rhsV = rhsBase }
+          }
+
+          const op = OP_SYM[cond.op] || cond.op
+          let r
+          if (op === '>')  r = lhsV >  rhsV
+          else if (op === '>=') r = lhsV >= rhsV
+          else if (op === '<')  r = lhsV <  rhsV
+          else if (op === '<=') r = lhsV <= rhsV
+          else if (op === '==') r = Math.abs(lhsV - rhsV) < 1e-9
+          else r = Math.abs(lhsV - rhsV) >= 1e-9
+          results.push(r)
+        }
+        if (!results.length) return null
+        return cond.rangeMode === 'any' ? results.some(Boolean) : results.every(Boolean)
+      }
+
+      // ── Standard single-candle check ──
       const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField)
       if (lhsV == null) return null
 
@@ -229,7 +317,7 @@ function Lbl({ children }) {
   return <div style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', marginBottom: 5 }}>{children}</div>
 }
 
-function FSelect({ value, offset, onField, onOffset, color }) {
+function FSelect({ value, offset, onField, onOffset, color, hideOffset }) {
   return (
     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
       <select value={value} onChange={e => onField(e.target.value)} style={{
@@ -243,13 +331,20 @@ function FSelect({ value, offset, onField, onOffset, color }) {
           </optgroup>
         ))}
       </select>
-      <select value={offset ?? 0} onChange={e => onOffset(parseInt(e.target.value))} style={{
-        background: 'var(--bg3)', border: '1.5px solid var(--border)',
-        color: 'var(--text2)', borderRadius: 8, padding: '6px 8px',
-        fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
-      }}>
-        {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-      </select>
+      {!hideOffset && (
+        <select value={offset ?? 0} onChange={e => onOffset(parseInt(e.target.value))} style={{
+          background: 'var(--bg3)', border: '1.5px solid var(--border)',
+          color: 'var(--text2)', borderRadius: 8, padding: '6px 8px',
+          fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
+        }}>
+          {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      )}
+      {hideOffset && (
+        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', alignSelf: 'center', opacity: .7 }}>
+          offset set by range
+        </span>
+      )}
     </div>
   )
 }
@@ -352,13 +447,113 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
       {open && (
         <div style={{ padding: '8px 9px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
 
-          {/* LEFT SIDE */}
+          {/* RANGE CHECK TOGGLE */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '7px 10px', borderRadius: 8,
+            background: cond.rangeCheck ? `${color}14` : 'rgba(0,0,0,0.12)',
+            border: `1px solid ${cond.rangeCheck ? color + '40' : 'var(--border)'}`,
+            transition: 'all .15s',
+          }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: cond.rangeCheck ? color : 'var(--text2)' }}>
+                Multi-Candle Range
+              </div>
+              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 1 }}>
+                {cond.rangeCheck
+                  ? `Check ${Math.abs((cond.rangeTo ?? -5) - (cond.rangeFrom ?? -1)) + 1} candles [${cond.rangeFrom ?? -1} → ${cond.rangeTo ?? -5}]`
+                  : 'Apply condition across a window of candles'}
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div onClick={() => s('rangeCheck', !cond.rangeCheck)} style={{
+              width: 38, height: 22, borderRadius: 11, cursor: 'pointer', flexShrink: 0,
+              background: cond.rangeCheck ? color : 'var(--bg3)',
+              border: `1.5px solid ${cond.rangeCheck ? color : 'var(--border)'}`,
+              position: 'relative', transition: 'all .2s',
+            }}>
+              <div style={{
+                position: 'absolute', top: 2,
+                left: cond.rangeCheck ? 18 : 2,
+                width: 14, height: 14, borderRadius: '50%',
+                background: '#fff', transition: 'left .2s',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+              }} />
+            </div>
+          </div>
+
+          {/* RANGE WINDOW CONTROLS (shown when range is on) */}
+          {cond.rangeCheck && (
+            <div style={{
+              padding: '10px 10px', borderRadius: 8,
+              background: `${color}0a`, border: `1px solid ${color}30`,
+              display: 'flex', flexDirection: 'column', gap: 9,
+            }}>
+              {/* From / To row */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <Lbl>FROM (newest)</Lbl>
+                  <select value={cond.rangeFrom ?? -1} onChange={e => s('rangeFrom', parseInt(e.target.value))} style={{
+                    width: '100%', background: 'var(--bg3)', border: `1.5px solid ${color}40`,
+                    color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 11,
+                    fontFamily: 'var(--mono)',
+                  }}>
+                    {Array.from({ length: 21 }, (_, i) => -i).map(v => (
+                      <option key={v} value={v}>[{v}] {v === 0 ? 'Current' : `Prev ${Math.abs(v)}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Lbl>TO (oldest)</Lbl>
+                  <select value={cond.rangeTo ?? -5} onChange={e => s('rangeTo', parseInt(e.target.value))} style={{
+                    width: '100%', background: 'var(--bg3)', border: `1.5px solid ${color}40`,
+                    color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 11,
+                    fontFamily: 'var(--mono)',
+                  }}>
+                    {Array.from({ length: 21 }, (_, i) => -i).map(v => (
+                      <option key={v} value={v}>[{v}] {v === 0 ? 'Current' : `Prev ${Math.abs(v)}`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* ALL / ANY */}
+              <div>
+                <Lbl>MATCH</Lbl>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {RANGE_MODES.map(m => (
+                    <button key={m.id} onClick={() => s('rangeMode', m.id)} style={{
+                      flex: 1, padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
+                      fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
+                      border: `1.5px solid ${cond.rangeMode === m.id ? color : 'var(--border)'}`,
+                      background: cond.rangeMode === m.id ? `${color}20` : 'var(--bg3)',
+                      color: cond.rangeMode === m.id ? color : 'var(--text3)',
+                      transition: 'all .15s',
+                    }}>{m.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary pill */}
+              <div style={{
+                fontSize: 10, fontFamily: 'var(--mono)', color: color,
+                padding: '4px 9px', borderRadius: 6,
+                background: `${color}10`, border: `1px solid ${color}25`,
+              }}>
+                {cond.rangeMode === 'any' ? 'ANY' : 'ALL'} candles
+                from [{cond.rangeFrom ?? -1}] to [{cond.rangeTo ?? -5}]
+                ({Math.abs((cond.rangeTo ?? -5) - (cond.rangeFrom ?? -1)) + 1} candles) must pass
+              </div>
+            </div>
+          )}
+
+          {/* LEFT SIDE — show candle offset only when range is OFF */}
           <div style={{ padding: '7px 8px', borderRadius: 7, background: 'rgba(0,0,0,0.18)' }}>
             <Lbl>LEFT — candle field</Lbl>
             <FSelect
-              value={cond.lhsField} offset={cond.lhsOffset}
-              onField={v => s('lhsField', v)} onOffset={v => s('lhsOffset', v)}
-              color={color}
+              value={cond.lhsField} offset={cond.rangeCheck ? 0 : cond.lhsOffset}
+              onField={v => s('lhsField', v)} onOffset={cond.rangeCheck ? null : v => s('lhsOffset', v)}
+              color={color} hideOffset={!!cond.rangeCheck}
             />
           </div>
 
