@@ -479,12 +479,14 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
 function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [mirrorPopup, setMirrorPopup] = useState(false)
+  const [mirrorName, setMirrorName] = useState('')
+  const mirrorInputRef = React.useRef(null)
   const color = pattern.side === 'bull' ? G : R
   const nameRef = React.useRef(null)
 
   React.useEffect(() => {
     if (defaultOpen && nameRef.current) {
-      // Small delay so the body has rendered before we scroll/focus
       const t = setTimeout(() => {
         nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         nameRef.current?.focus()
@@ -493,6 +495,20 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
       return () => clearTimeout(t)
     }
   }, [])
+
+  React.useEffect(() => {
+    if (mirrorPopup) {
+      setMirrorName(`Mirror of ${pattern.name}`)
+      setTimeout(() => { mirrorInputRef.current?.focus(); mirrorInputRef.current?.select() }, 60)
+    }
+  }, [mirrorPopup])
+
+  function handleMirrorSave() {
+    onMirrorPattern(mirrorName.trim() || `Mirror of ${pattern.name}`)
+    setMirrorPopup(false)
+  }
+
+  const mirroredSide = pattern.side === 'bull' ? 'bear' : 'bull'
 
   function s(k, v) { onChange({ ...pattern, [k]: v }) }
   function setCond(i, c) { const cs = [...pattern.conditions]; cs[i] = c; s('conditions', cs) }
@@ -513,10 +529,72 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   const active = pattern.conditions.filter(c => c.enabled).length
 
   return (
+    <div style={{ position: 'relative' }}>
+
+      {/* ── Mirror rename popup ── */}
+      {mirrorPopup && (
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setMirrorPopup(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,0.45)',
+          }} />
+          {/* Card */}
+          <div style={{
+            position: 'absolute', top: 6, left: 0, right: 0, zIndex: 100,
+            borderRadius: 13, padding: '18px 16px',
+            background: 'var(--bg1)',
+            border: `1.5px solid ${BLU}70`,
+            boxShadow: `0 10px 40px rgba(0,0,0,0.65), 0 0 0 1px ${BLU}18`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 18 }}>⇄</span>
+              <div style={{ fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 14, color: BLU }}>
+                Mirror Pattern
+              </div>
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+              Creates a new {mirroredSide === 'bull' ? '🟢 Bull' : '🔴 Bear'} pattern with all operators flipped.
+              Give it a name before saving.
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', fontWeight: 700,
+              letterSpacing: '.07em', marginBottom: 6 }}>NAME</div>
+            <input
+              ref={mirrorInputRef}
+              value={mirrorName}
+              onChange={e => setMirrorName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleMirrorSave(); if (e.key === 'Escape') setMirrorPopup(false) }}
+              placeholder={`Mirror of ${pattern.name}`}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--bg3)', border: `1.5px solid ${BLU}80`,
+                color: 'var(--text)', borderRadius: 8, padding: '10px 12px',
+                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                boxShadow: `0 0 0 3px ${BLU}18`, outline: 'none', marginBottom: 13,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleMirrorSave} style={{
+                flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                border: `1.5px solid ${BLU}70`, background: `${BLU}25`, color: BLU,
+              }}>✓ Save &amp; Add Pattern</button>
+              <button onClick={() => setMirrorPopup(false)} style={{
+                padding: '10px 15px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text3)',
+              }}>Cancel</button>
+            </div>
+          </div>
+        </>
+      )}
+
     <div style={{
       borderRadius: 13,
       border: `1.5px solid ${pattern.enabled ? color + '55' : 'var(--border)'}`,
       background: 'var(--bg1)', overflow: 'hidden',
+      opacity: mirrorPopup ? 0.3 : 1,
+      transition: 'opacity .15s',
+      pointerEvents: mirrorPopup ? 'none' : 'auto',
     }}>
       {/* Header */}
       <div
@@ -548,10 +626,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
               width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
-          <button onClick={() => {
-            onMirrorPattern()
-            // After mirror creates new pattern below, scroll & focus its name — handled by PatternBuilderTab via newId
-          }} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
+          <button onClick={() => setMirrorPopup(true)} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
             width: 28, height: 28, borderRadius: 7,
             border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
             color: BLU, cursor: 'pointer', fontSize: 15,
@@ -684,6 +759,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
         </div>
       )}
     </div>
+    </div>
   )
 }
 
@@ -722,12 +798,12 @@ export default function PatternBuilderTab({ settings, update }) {
     saveTrash([])
   }
 
-  function mirrorPattern(i) {
+  function mirrorPattern(i, customName) {
     const src = patterns[i]
     const mirrored = {
       ...src,
       id: `custom_${uid()}`,
-      name: `Mirror of ${src.name}`,
+      name: customName || `Mirror of ${src.name}`,
       side: src.side === 'bull' ? 'bear' : 'bull',
       conditions: src.conditions.map(c => ({
         ...c,
@@ -790,7 +866,7 @@ export default function PatternBuilderTab({ settings, update }) {
             <PatternEditor
               key={p.id} pattern={p} defaultOpen={p.id === newId}
               onChange={np => upd(i, np)} onDelete={() => del(i)}
-              onMirrorPattern={() => mirrorPattern(i)}
+              onMirrorPattern={(name) => mirrorPattern(i, name)}
             />
           ))}
         </div>
