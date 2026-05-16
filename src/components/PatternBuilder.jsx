@@ -299,7 +299,7 @@ function JoinBadge({ value, onChange }) {
 }
 
 // ── Condition card ────────────────────────────────────────────────────────────
-function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirror, onMoveUp, onMoveDown }) {
+function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown }) {
   const [open, setOpen] = useState(true)
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
@@ -342,7 +342,6 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
           {idx > 0        && <IBtn onClick={onMoveUp}   title="Move up">↑</IBtn>}
           {idx < total-1  && <IBtn onClick={onMoveDown} title="Move down">↓</IBtn>}
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
-          <IBtn onClick={onMirror} title="Add mirrored condition (flipped operator)" col="#f06292">⇄</IBtn>
           <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
         </div>
         <span onClick={() => setOpen(o => !o)} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
@@ -477,7 +476,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
 }
 
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const color = pattern.side === 'bull' ? G : R
 
@@ -487,11 +486,6 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
   function copyCond(i)   {
     const cs = [...pattern.conditions]
     cs.splice(i + 1, 0, { ...cs[i], id: uid() })
-    s('conditions', cs)
-  }
-  function mirrorCondAt(i) {
-    const cs = [...pattern.conditions]
-    cs.splice(i + 1, 0, mirrorCond(cs[i]))
     s('conditions', cs)
   }
   function moveCond(from, to) {
@@ -540,6 +534,13 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
               width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
+          <button onClick={onMirrorPattern} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
+            width: 28, height: 28, borderRadius: 7,
+            border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
+            color: BLU, cursor: 'pointer', fontSize: 15,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700,
+          }}>⇄</button>
           <button onClick={onDelete} style={{
             width: 28, height: 28, borderRadius: 7,
             border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
@@ -621,7 +622,6 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
                     onChange={c => setCond(idx, c)}
                     onRemove={() => delCond(idx)}
                     onCopy={() => copyCond(idx)}
-                    onMirror={() => mirrorCondAt(idx)}
                     onMoveUp={() => moveCond(idx, idx - 1)}
                     onMoveDown={() => moveCond(idx, idx + 1)}
                   />
@@ -658,6 +658,26 @@ export default function PatternBuilderTab({ settings, update }) {
   function add()     { const p = blankPattern(); setNewId(p.id); save([...patterns, p]) }
   function upd(i, p) { const ps = [...patterns]; ps[i] = p; save(ps) }
   function del(i)    { save(patterns.filter((_, j) => j !== i)) }
+  function mirrorPattern(i) {
+    const src = patterns[i]
+    const mirrored = {
+      ...src,
+      id: `custom_${uid()}`,
+      name: `Mirror of ${src.name}`,
+      side: src.side === 'bull' ? 'bear' : 'bull',
+      conditions: src.conditions.map(c => ({
+        ...c,
+        id: uid(),
+        op: MIRROR_OP[c.op] ?? c.op,
+        label: c.label ? `Mirror of ${c.label}` : '',
+      })),
+      createdAt: Date.now(),
+    }
+    const ps = [...patterns]
+    ps.splice(i + 1, 0, mirrored)
+    setNewId(mirrored.id)
+    save(ps)
+  }
 
   const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
   const bear = patterns.filter(p => p.side === 'bear' && p.enabled).length
@@ -706,6 +726,7 @@ export default function PatternBuilderTab({ settings, update }) {
             <PatternEditor
               key={p.id} pattern={p} defaultOpen={p.id === newId}
               onChange={np => upd(i, np)} onDelete={() => del(i)}
+              onMirrorPattern={() => mirrorPattern(i)}
             />
           ))}
         </div>
