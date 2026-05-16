@@ -858,36 +858,53 @@ export default function PatternBuilderTab({ settings, update }) {
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
       </div>
 
-      {/* List */}
+      {/* List — "My Patterns" section */}
       {patterns.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>🔬</div>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c6ff00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4, marginBottom: 10 }}>
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
           <div style={{ fontSize: 13 }}>No custom patterns yet</div>
-          <div style={{ fontSize: 10, marginTop: 5, opacity: .7 }}>Tap + New Pattern to start</div>
+          <div style={{ fontSize: 10, marginTop: 5, opacity: .6 }}>Tap New Pattern to build one</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
-          {patterns.map((p, i) => (
-            <PatternEditor
-              key={p.id} pattern={p} defaultOpen={p.id === newId}
-              onChange={np => upd(i, np)} onDelete={() => del(i)}
-              onMirrorPattern={(name) => mirrorPattern(i, name)}
-              allPatternNames={patterns.map(x => x.name)}
-            />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+            <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: '#c6ff00', opacity: .8 }}>
+              MY PATTERNS
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
+            {patterns.map((p, i) => (
+              <PatternEditor
+                key={p.id} pattern={p} defaultOpen={p.id === newId}
+                onChange={np => upd(i, np)} onDelete={() => del(i)}
+                onMirrorPattern={(name) => mirrorPattern(i, name)}
+                allPatternNames={patterns.map(x => x.name)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Add button */}
       <button onClick={add} style={{
-        width: '100%', padding: '13px', borderRadius: 10, cursor: 'pointer',
+        width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
         fontSize: 13, fontFamily: 'var(--mono)', fontWeight: 800,
-        border: '2px dashed rgba(179,136,255,0.4)',
-        background: 'rgba(179,136,255,0.06)', color: A,
+        border: '2px dashed rgba(198,255,0,0.35)',
+        background: 'rgba(198,255,0,0.05)', color: '#c6ff00',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(179,136,255,0.13)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(179,136,255,0.06)'}
-      >+ New Pattern</button>
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(198,255,0,0.1)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(198,255,0,0.05)'}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        New Pattern
+      </button>
 
       {/* ── Trash Bin ── */}
       <div style={{ marginTop: 22 }}>

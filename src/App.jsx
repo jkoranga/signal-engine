@@ -17,7 +17,7 @@ export const TF_TABS = [
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
-  { id: 'builder',  label: '🔧', color: '#b388ff', glow: 'rgba(179,136,255,0.3)', isBuilder: true },
+  { id: 'builder',  label: '🔧', color: '#c6ff00', glow: 'rgba(198,255,0,0.3)', isBuilder: true },
   { id: 'settings', label: 'settings', color: '#00b8d9', glow: 'rgba(0,184,217,0.3)', isSettings: true },
 ]
 
@@ -509,6 +509,67 @@ function PatternsModal({ open, onClose, settings, update }) {
               )
             })}
           </div>
+
+          {/* ── My Patterns (user-built) ── */}
+          {(() => {
+            const custom = (settings.customPatterns || []).filter(p =>
+              sideFilter === 'all' || p.side === sideFilter
+            )
+            if (custom.length === 0) return null
+            return (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+                  <span style={{
+                    fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
+                    letterSpacing: '.1em', color: '#c6ff00', opacity: .8,
+                  }}>MY PATTERNS</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {custom.map(p => {
+                    const isBull = p.side === 'bull'
+                    const col = isBull ? 'var(--green)' : 'var(--red)'
+                    const bd  = isBull ? 'rgba(0,200,100,0.45)' : 'rgba(255,60,80,0.45)'
+                    const bg  = isBull ? 'rgba(0,230,118,0.06)' : 'rgba(255,60,80,0.06)'
+                    const activeConds = (p.conditions || []).filter(c => c.enabled)
+                    return (
+                      <div key={p.id} style={{
+                        borderRadius: 10,
+                        border: `1.5px solid ${p.enabled ? bd : 'var(--border)'}`,
+                        background: p.enabled ? bg : 'var(--bg2)',
+                        opacity: p.enabled ? 1 : 0.5,
+                        transition: 'all .18s',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px' }}>
+                          <span style={{ fontSize: 19, flexShrink: 0 }}>{p.icon || '🔧'}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: p.enabled ? col : 'var(--text2)' }}>
+                              {p.name}
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                              {(p.tfs || []).map(tf => (
+                                <span key={tf} style={{
+                                  fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700,
+                                  padding: '2px 5px', borderRadius: 4,
+                                  background: `${col}18`, color: col,
+                                  border: `1px solid ${col}40`,
+                                }}>{tf}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', flexShrink: 0, textAlign: 'right' }}>
+                            <div>{activeConds.length} cond{activeConds.length !== 1 ? 's' : ''}</div>
+                            <div style={{ marginTop: 2, fontSize: 8, opacity: .7 }}>custom</div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>
@@ -740,7 +801,9 @@ export default function App() {
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
               ) : tab.isBuilder ? (
-                <span style={{ fontSize: 18 }}>🔧</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
               ) : (
                 <span className="bottom-tab-label">{tab.label}</span>
               )}
