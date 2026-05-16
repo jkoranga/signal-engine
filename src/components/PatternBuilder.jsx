@@ -478,7 +478,21 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
 // ── Pattern editor ────────────────────────────────────────────────────────────
 function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen }) {
   const [open, setOpen] = useState(!!defaultOpen)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const color = pattern.side === 'bull' ? G : R
+  const nameRef = React.useRef(null)
+
+  React.useEffect(() => {
+    if (defaultOpen && nameRef.current) {
+      // Small delay so the body has rendered before we scroll/focus
+      const t = setTimeout(() => {
+        nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        nameRef.current?.focus()
+        nameRef.current?.select()
+      }, 120)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   function s(k, v) { onChange({ ...pattern, [k]: v }) }
   function setCond(i, c) { const cs = [...pattern.conditions]; cs[i] = c; s('conditions', cs) }
@@ -534,19 +548,41 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
               width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
-          <button onClick={onMirrorPattern} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
+          <button onClick={() => {
+            onMirrorPattern()
+            // After mirror creates new pattern below, scroll & focus its name — handled by PatternBuilderTab via newId
+          }} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
             width: 28, height: 28, borderRadius: 7,
             border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
             color: BLU, cursor: 'pointer', fontSize: 15,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700,
           }}>⇄</button>
-          <button onClick={onDelete} style={{
-            width: 28, height: 28, borderRadius: 7,
-            border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
-            color: 'var(--red)', cursor: 'pointer', fontSize: 16,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>🗑</button>
+
+          {confirmDelete ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)', whiteSpace: 'nowrap' }}>Delete?</span>
+              <button onClick={onDelete} style={{
+                padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)',
+                color: 'var(--red)',
+              }}>Yes</button>
+              <button onClick={() => setConfirmDelete(false)} style={{
+                padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                border: '1px solid var(--border)', background: 'var(--bg3)',
+                color: 'var(--text2)',
+              }}>No</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} style={{
+              width: 28, height: 28, borderRadius: 7,
+              border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
+              color: 'var(--red)', cursor: 'pointer', fontSize: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>🗑</button>
+          )}
         </div>
         <span style={{ color: 'var(--text3)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -571,11 +607,13 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
             </div>
             <div style={{ flex: 1, minWidth: 140 }}>
               <Lbl>NAME</Lbl>
-              <input value={pattern.name} onChange={e => s('name', e.target.value)} style={{
+              <input ref={nameRef} value={pattern.name} onChange={e => s('name', e.target.value)} style={{
                 width: '100%', boxSizing: 'border-box',
-                background: 'var(--bg3)', border: '1.5px solid var(--border2)',
+                background: 'var(--bg3)', border: `1.5px solid ${defaultOpen ? BLU + 'cc' : 'var(--border2)'}`,
                 color: 'var(--text)', borderRadius: 8, padding: '8px 10px',
                 fontSize: 13, fontWeight: 700,
+                boxShadow: defaultOpen ? `0 0 0 2px ${BLU}33` : 'none',
+                transition: 'border .3s, box-shadow .3s',
               }} />
             </div>
           </div>
@@ -652,12 +690,38 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
 // ── Main tab ──────────────────────────────────────────────────────────────────
 export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
+  const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
+  const [trashOpen, setTrashOpen] = useState(false)
 
-  function save(ps) { update({ customPatterns: ps }) }
-  function add()     { const p = blankPattern(); setNewId(p.id); save([...patterns, p]) }
-  function upd(i, p) { const ps = [...patterns]; ps[i] = p; save(ps) }
-  function del(i)    { save(patterns.filter((_, j) => j !== i)) }
+  function savePatterns(ps) { update({ customPatterns: ps }) }
+  function saveTrash(ts)    { update({ deletedPatterns: ts }) }
+
+  function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
+  function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
+
+  function del(i) {
+    const removed = { ...patterns[i], deletedAt: Date.now() }
+    const newTrash = [removed, ...trash].slice(0, 50)
+    savePatterns(patterns.filter((_, j) => j !== i))
+    saveTrash(newTrash)
+  }
+
+  function restore(i) {
+    const p = { ...trash[i], deletedAt: undefined }
+    setNewId(p.id)
+    savePatterns([...patterns, p])
+    saveTrash(trash.filter((_, j) => j !== i))
+  }
+
+  function purgeOne(i) {
+    saveTrash(trash.filter((_, j) => j !== i))
+  }
+
+  function purgeAll() {
+    saveTrash([])
+  }
+
   function mirrorPattern(i) {
     const src = patterns[i]
     const mirrored = {
@@ -676,7 +740,7 @@ export default function PatternBuilderTab({ settings, update }) {
     const ps = [...patterns]
     ps.splice(i + 1, 0, mirrored)
     setNewId(mirrored.id)
-    save(ps)
+    savePatterns(ps)
   }
 
   const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
@@ -742,6 +806,104 @@ export default function PatternBuilderTab({ settings, update }) {
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(179,136,255,0.13)'}
         onMouseLeave={e => e.currentTarget.style.background = 'rgba(179,136,255,0.06)'}
       >+ New Pattern</button>
+
+      {/* ── Trash Bin ── */}
+      <div style={{ marginTop: 22 }}>
+        {/* Trash header toggle */}
+        <button
+          onClick={() => setTrashOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 13px', borderRadius: 10, cursor: 'pointer',
+            border: '1.5px solid rgba(255,160,0,0.25)',
+            background: trashOpen ? 'rgba(255,160,0,0.07)' : 'rgba(255,160,0,0.03)',
+            color: AMB, fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 13,
+            transition: 'background .15s',
+          }}
+        >
+          <span style={{ fontSize: 16 }}>🗑</span>
+          <span style={{ flex: 1, textAlign: 'left' }}>Trash Bin</span>
+          <span style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 5,
+            background: trash.length ? 'rgba(255,160,0,0.18)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${trash.length ? 'rgba(255,160,0,0.4)' : 'var(--border)'}`,
+          }}>{trash.length} / 50</span>
+          <span style={{ fontSize: 11, opacity: .6 }}>{trashOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {trashOpen && (
+          <div style={{
+            marginTop: 6, borderRadius: 10, overflow: 'hidden',
+            border: '1.5px solid rgba(255,160,0,0.2)',
+            background: 'rgba(255,160,0,0.03)',
+          }}>
+            {trash.length === 0 ? (
+              <div style={{ padding: '28px 16px', textAlign: 'center', fontFamily: 'var(--mono)', color: 'var(--text3)', fontSize: 11 }}>
+                Trash is empty
+              </div>
+            ) : (
+              <>
+                {/* Purge all */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 10px 4px' }}>
+                  <button onClick={purgeAll} style={{
+                    fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+                    padding: '4px 11px', borderRadius: 6, cursor: 'pointer',
+                    border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
+                    color: 'var(--red)',
+                  }}>Clear all</button>
+                </div>
+
+                {/* Trash items */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {trash.map((p, i) => {
+                    const c = p.side === 'bull' ? G : R
+                    const ago = p.deletedAt
+                      ? (() => {
+                          const s = Math.floor((Date.now() - p.deletedAt) / 1000)
+                          if (s < 60) return `${s}s ago`
+                          if (s < 3600) return `${Math.floor(s/60)}m ago`
+                          if (s < 86400) return `${Math.floor(s/3600)}h ago`
+                          return `${Math.floor(s/86400)}d ago`
+                        })()
+                      : ''
+                    return (
+                      <div key={p.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '9px 11px',
+                        borderBottom: i < trash.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                        background: 'transparent',
+                      }}>
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>{p.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12, color: c,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.name}
+                          </div>
+                          <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
+                            {p.side.toUpperCase()} · {p.conditions?.length ?? 0} conds · {p.tfs?.join(' ') || 'no TF'} · deleted {ago}
+                          </div>
+                        </div>
+                        <button onClick={() => restore(i)} title="Restore pattern" style={{
+                          fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+                          padding: '4px 10px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                          border: '1px solid rgba(0,230,118,0.35)', background: 'rgba(0,230,118,0.08)',
+                          color: G,
+                        }}>↩ Restore</button>
+                        <button onClick={() => purgeOne(i)} title="Delete permanently" style={{
+                          width: 26, height: 26, borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                          border: '1px solid rgba(255,60,60,0.25)', background: 'rgba(255,60,60,0.06)',
+                          color: 'var(--red)', fontSize: 13,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
