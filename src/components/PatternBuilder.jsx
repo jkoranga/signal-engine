@@ -340,11 +340,6 @@ function FSelect({ value, offset, onField, onOffset, color, hideOffset }) {
           {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
         </select>
       )}
-      {hideOffset && (
-        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', alignSelf: 'center', opacity: .7 }}>
-          offset set by range
-        </span>
-      )}
     </div>
   )
 }
@@ -591,7 +586,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
               <FSelect
                 value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                 onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                color={color}
+                color={color} hideOffset={!!cond.rangeCheck}
               />
             )}
 
@@ -600,7 +595,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span style={{ fontFamily:'var(--mono)', color:'var(--text3)', fontSize:13 }}>×</span>
@@ -615,7 +610,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <NInput value={cond.rhsPct ?? 0} onChange={v => s('rhsPct', v)} step="0.01" suffix="%" />
               </div>
@@ -626,7 +621,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)' }}>{cond.op}</span>
