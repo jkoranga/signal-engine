@@ -16,7 +16,7 @@ export const TF_TABS = [
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
-  { id: 'builder',  label: '🔧', color: '#c6ff00', glow: 'rgba(198,255,0,0.3)', isBuilder: true },
+  { id: 'builder',  label: '🔧', color: 'var(--lime)', glow: 'var(--lime-dim)', isBuilder: true },
   { id: 'settings', label: 'settings', color: '#00b8d9', glow: 'rgba(0,184,217,0.3)', isSettings: true },
 ]
 
@@ -61,9 +61,12 @@ function LogoMark({ size=32 }) {
 }
 
 function LoginModal({ onClose, onUserChange }) {
-  const [email, setEmail] = React.useState('')
-  const [pass,  setPass]  = React.useState('')
-  const [err,   setErr]   = React.useState('')
+  const [tab,     setTab]     = React.useState('signin')  // 'signin' | 'signup'
+  const [email,   setEmail]   = React.useState('')
+  const [pass,    setPass]    = React.useState('')
+  const [name,    setName]    = React.useState('')
+  const [confirm, setConfirm] = React.useState('')
+  const [err,     setErr]     = React.useState('')
   const [loading, setLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -72,52 +75,103 @@ function LoginModal({ onClose, onUserChange }) {
     return () => document.removeEventListener('keydown', fn)
   }, [onClose])
 
+  // Reset fields when switching tabs
+  function switchTab(t) {
+    setTab(t); setErr('')
+    setEmail(''); setPass(''); setName(''); setConfirm('')
+  }
+
   async function handleGoogle() {
-    setErr('')
-    setLoading(true)
+    setErr(''); setLoading(true)
     try {
       const { loginWithGoogle, checkConfigured } = await import('./firebase.js')
       if (!checkConfigured()) { setErr('Firebase not configured. Add VITE_FB_* to .env'); return }
       const u = await loginWithGoogle()
-      onUserChange(u)
-      onClose()
+      onUserChange(u); onClose()
     } catch(e) { setErr(e.message) }
     finally { setLoading(false) }
   }
 
-  async function handleEmail(e) {
-    e.preventDefault(); setErr('')
-    setLoading(true)
+  async function handleSignIn(e) {
+    e.preventDefault(); setErr(''); setLoading(true)
     try {
       const { loginWithEmail, checkConfigured } = await import('./firebase.js')
       if (!checkConfigured()) { setErr('Firebase not configured.'); return }
       const u = await loginWithEmail(email, pass)
-      onUserChange(u)
-      onClose()
+      onUserChange(u); onClose()
     } catch(e) { setErr(e.message) }
     finally { setLoading(false) }
+  }
+
+  async function handleSignUp(e) {
+    e.preventDefault(); setErr('')
+    if (!name.trim())          { setErr('Please enter your name.'); return }
+    if (pass.length < 6)       { setErr('Password must be at least 6 characters.'); return }
+    if (pass !== confirm)      { setErr('Passwords do not match.'); return }
+    setLoading(true)
+    try {
+      const { signUpWithEmail, checkConfigured } = await import('./firebase.js')
+      if (!checkConfigured()) { setErr('Firebase not configured.'); return }
+      const u = await signUpWithEmail(email, pass, name)
+      onUserChange(u); onClose()
+    } catch(e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const isSignIn = tab === 'signin'
+  const accent = isSignIn ? 'var(--green)' : 'var(--accent)'
+  const accentDim = isSignIn ? 'var(--green-dim)' : 'var(--accent-dim)'
+
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box', padding: '9px 11px',
+    borderRadius: 8, border: '1px solid var(--border2)',
+    background: 'var(--bg3)', color: 'var(--text)',
+    fontSize: 13, fontFamily: 'inherit', outline: 'none',
   }
 
   return (
     <div style={{
       position:'fixed', inset:0, zIndex:1000,
       display:'flex', alignItems:'center', justifyContent:'center',
-      background:'rgba(0,0,0,0.7)', backdropFilter:'blur(4px)',
+      background:'rgba(0,0,0,0.72)', backdropFilter:'blur(5px)',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background:'var(--bg2)', border:'1px solid var(--border2)',
-        borderRadius:16, padding:'28px 24px', width:'min(340px, 92vw)',
-        boxShadow:'0 12px 48px rgba(0,0,0,0.7)',
+        borderRadius:18, padding:'24px 22px', width:'min(360px, 94vw)',
+        boxShadow:'0 16px 56px rgba(0,0,0,0.75)',
       }}>
+
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:22 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:17, color:'var(--text)' }}>Sign In</div>
-            <div style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:3 }}>Sync settings across devices</div>
+            <div style={{ fontWeight:800, fontSize:17, color:'var(--text)' }}>
+              {isSignIn ? 'Welcome Back' : 'Create Account'}
+            </div>
+            <div style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:3 }}>
+              {isSignIn ? 'Sync settings across devices' : 'Start tracking signals today'}
+            </div>
           </div>
           <button onClick={onClose} style={{ width:28,height:28,borderRadius:'50%',border:'1px solid var(--border)',
             background:'var(--bg3)',color:'var(--text3)',cursor:'pointer',fontSize:16,display:'flex',
             alignItems:'center',justifyContent:'center' }}>✕</button>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{
+          display:'flex', borderRadius:10, overflow:'hidden',
+          border:'1px solid var(--border2)', marginBottom:20,
+          background:'var(--bg3)',
+        }}>
+          {[['signin','Sign In'],['signup','Sign Up']].map(([id, label]) => (
+            <button key={id} onClick={() => switchTab(id)} style={{
+              flex:1, padding:'9px', border:'none', cursor:'pointer',
+              fontFamily:'var(--mono)', fontWeight:700, fontSize:12,
+              background: tab === id ? (id === 'signin' ? 'var(--green-dim)' : 'var(--accent-dim)') : 'transparent',
+              color: tab === id ? (id === 'signin' ? 'var(--green)' : 'var(--accent)') : 'var(--text3)',
+              borderBottom: tab === id ? `2px solid ${id === 'signin' ? 'var(--green)' : 'var(--accent)'}` : '2px solid transparent',
+              transition: 'all .15s',
+            }}>{label}</button>
+          ))}
         </div>
 
         {/* Google */}
@@ -126,7 +180,7 @@ function LoginModal({ onClose, onUserChange }) {
           width:'100%', padding:'11px', borderRadius:8,
           border:'1px solid var(--border2)', background:'var(--bg3)',
           color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer',
-          marginBottom:16, transition:'all .15s',
+          marginBottom:16, transition:'all .15s', boxSizing:'border-box',
         }}
           onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-dim)'}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--bg3)'}}
@@ -137,7 +191,7 @@ function LoginModal({ onClose, onUserChange }) {
             <path fill="#FBBC05" d="M24 44c5.2 0 9.8-1.7 13.4-4.7l-6.2-5.2C29.4 35.3 26.8 36 24 36c-5.6 0-10.1-3.5-11.7-8.4l-7 5.3C8 39.4 15.4 44 24 44z"/>
             <path fill="#EA4335" d="M44.5 20H24v8.5h11.7c-.9 2.5-2.5 4.6-4.7 6.1l6.2 5.2C40.8 36.3 44.5 30.6 44.5 24c0-1.3-.1-2.7-.2-4z"/>
           </svg>
-          {loading ? 'Signing in…' : 'Continue with Google'}
+          {loading ? (isSignIn ? 'Signing in…' : 'Creating…') : `Continue with Google`}
         </button>
 
         {/* Divider */}
@@ -147,22 +201,47 @@ function LoginModal({ onClose, onUserChange }) {
           <div style={{ flex:1, height:1, background:'var(--border)' }} />
         </div>
 
-        {/* Email form */}
-        <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-          <input className="field" type="email" placeholder="Email" value={email}
-            onChange={e => setEmail(e.target.value)} style={{ fontSize:13 }} />
-          <input className="field" type="password" placeholder="Password" value={pass}
-            onChange={e => setPass(e.target.value)} style={{ fontSize:13 }} />
-          <button onClick={handleEmail} disabled={loading} style={{
-            padding:'10px', borderRadius:8,
-            border:'1px solid var(--green2)', background:'var(--green-dim)',
-            color:'var(--green)', fontSize:13, fontWeight:700, cursor:'pointer',
-          }}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </button>
-        </div>
+        {/* Sign In form */}
+        {isSignIn && (
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Password" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSignIn(e)} />
+            <button onClick={handleSignIn} disabled={loading} style={{
+              padding:'10px', borderRadius:8, border:`1px solid var(--green2)`,
+              background:'var(--green-dim)', color:'var(--green)',
+              fontSize:13, fontWeight:700, cursor:'pointer',
+            }}>{loading ? 'Signing in…' : 'Sign In'}</button>
+            <div style={{ textAlign:'center', fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2 }}>
+              No account?{' '}
+              <span onClick={() => switchTab('signup')} style={{ color:'var(--accent)', cursor:'pointer', fontWeight:700 }}>
+                Create one →
+              </span>
+            </div>
+          </div>
+        )}
 
-        {err && <div style={{ marginTop:10, fontSize:11, color:'var(--red)', fontFamily:'var(--mono)' }}>{err}</div>}
+        {/* Sign Up form */}
+        {!isSignIn && (
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            <input style={inputStyle} type="text"     placeholder="Your name"       value={name}    onChange={e => setName(e.target.value)} />
+            <input style={inputStyle} type="email"    placeholder="Email"           value={email}   onChange={e => setEmail(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Password (6+ chars)"  value={pass}    onChange={e => setPass(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Confirm password" value={confirm} onChange={e => setConfirm(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSignUp(e)} />
+            <button onClick={handleSignUp} disabled={loading} style={{
+              padding:'10px', borderRadius:8, border:`1px solid var(--accent)`,
+              background:'var(--accent-dim)', color:'var(--accent)',
+              fontSize:13, fontWeight:700, cursor:'pointer',
+            }}>{loading ? 'Creating account…' : 'Create Account'}</button>
+            <div style={{ textAlign:'center', fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2 }}>
+              Already have an account?{' '}
+              <span onClick={() => switchTab('signin')} style={{ color:'var(--green)', cursor:'pointer', fontWeight:700 }}>
+                Sign in →
+              </span>
+            </div>
+          </div>
+        )}
+
+        {err && <div style={{ marginTop:10, fontSize:11, color:'var(--red)', fontFamily:'var(--mono)', lineHeight:1.5 }}>{err}</div>}
       </div>
     </div>
   )
@@ -526,9 +605,9 @@ function PatternsModal({ open, onClose, settings, update }) {
             return (
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
-                  <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: '#c6ff00', opacity: .8 }}>MY PATTERNS</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+                  <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
+                  <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: 'var(--lime)', opacity: .8 }}>MY PATTERNS</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -699,8 +778,46 @@ export default function App() {
   const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
   const [showPatterns, setShowPatterns] = useState(false)
+  const [prevTab, setPrevTab] = useState('15m')
+  const [showExitWarning, setShowExitWarning] = useState(false)
 
-  const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
+  // Back button: go home first press, show exit warning second press
+  const HOME_TAB = '15m'
+  const activeTabRef = React.useRef(activeTab)
+  const showExitRef  = React.useRef(false)
+  activeTabRef.current  = activeTab
+  showExitRef.current   = showExitWarning
+
+  useEffect(() => {
+    // Push an extra history entry so we can intercept popstate
+    window.history.pushState({ signalEngine: true }, '')
+
+    function handlePop() {
+      // Always push state back so back button keeps working
+      window.history.pushState({ signalEngine: true }, '')
+
+      if (showExitRef.current) {
+        // Overlay is open — pressing back = Cancel
+        setShowExitWarning(false)
+        return
+      }
+
+      const tab = activeTabRef.current
+      if (tab !== HOME_TAB) {
+        // Not on home — navigate to home
+        setActiveTab(HOME_TAB)
+        setPrevTab(tab)
+      } else {
+        // Already on home — show exit overlay
+        setShowExitWarning(true)
+      }
+    }
+
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [])
+
+  const { settings, update, reset, cloudSynced, cloudSaving, saveNow, saveNowWithPatch, isFirstVisit } = useSettings(user)
 
   useEffect(() => {
     if (!checkConfigured()) { setAuthReady(true); return }
@@ -734,10 +851,28 @@ export default function App() {
     setScanProgress({ pct, color })
   }, [])
 
-  // Wrap tab navigation — counts each Settings visit to collapse accordions
   function navigateTo(tab) {
-    if (tab === 'settings') setSettingsOpenCount(c => c + 1)
+    if (tab === 'settings') {
+      if (activeTab === 'settings') {
+        // toggle off — go back to previous tab
+        setActiveTab(prevTab)
+        return
+      }
+      setPrevTab(activeTab)
+      setSettingsOpenCount(c => c + 1)
+    }
+    if (tab === 'builder') {
+      if (activeTab === 'builder') {
+        setActiveTab(prevTab)
+        return
+      }
+      setPrevTab(activeTab)
+    }
     setActiveTab(tab)
+  }
+
+  function togglePatterns() {
+    setShowPatterns(v => !v)
   }
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
@@ -752,6 +887,61 @@ export default function App() {
     <div className="app-shell-v2">
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} onUserChange={u => { setUser(u); setShowLoginModal(false) }} />
+      )}
+
+      {/* Exit confirmation overlay */}
+      {showExitWarning && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 3000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+          animation: 'fadeIn .15s ease',
+        }}>
+          <div style={{
+            background: 'var(--bg2)', border: '1.5px solid rgba(255,200,60,0.45)',
+            borderRadius: 20, padding: '28px 24px', width: 'min(300px, 88vw)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            animation: 'scaleIn .18s cubic-bezier(.34,1.56,.64,1)',
+          }}>
+            <div style={{ fontSize: 42, lineHeight: 1 }}>⚠️</div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>Exit Signal Engine?</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', lineHeight: 1.5 }}>
+                {scanProgress.pct >= 0 ? 'A scan is currently running.\nExiting will stop it.' : 'Are you sure you want to exit?'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+              <button
+                onClick={() => setShowExitWarning(false)}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  border: '1.5px solid var(--border2)', background: 'var(--bg3)',
+                  color: 'var(--text2)', fontSize: 14, fontWeight: 700, fontFamily: 'var(--mono)',
+                }}
+              >Cancel</button>
+              <button
+                onClick={() => {
+                  setShowExitWarning(false)
+                  // Try all exit methods for PWA / Capacitor / WebView / browser
+                  try { window.history.go(-(window.history.length)) } catch(_) {}
+                  try { if (window.navigator?.app?.exitApp) { window.navigator.app.exitApp(); return } } catch(_) {}
+                  try { if (window.Capacitor?.Plugins?.App) { window.Capacitor.Plugins.App.exitApp(); return } } catch(_) {}
+                  try { window.close() } catch(_) {}
+                  // Fallback: blank the page so it looks closed
+                  document.body.innerHTML = ''
+                  document.body.style.background = '#000'
+                }}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  border: '1.5px solid rgba(255,60,60,0.6)', background: 'rgba(255,60,60,0.15)',
+                  color: 'var(--red)', fontSize: 14, fontWeight: 800, fontFamily: 'var(--mono)',
+                  boxShadow: '0 0 16px rgba(255,60,60,0.2)',
+                }}
+              >Exit</button>
+            </div>
+          </div>
+        </div>
       )}
       <header className="topbar-v2" style={{
         borderBottom: 'none',
@@ -794,23 +984,19 @@ export default function App() {
         <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
           {/* Patterns button — jumps directly to Patterns accordion in Settings */}
           <button
-            onClick={() => setShowPatterns(true)}
-            title="Patterns"
+            onClick={togglePatterns}
+            title={showPatterns ? 'Close Patterns' : 'Open Patterns'}
             style={{
               height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
-              border: activeTab==='builder' ? '1.5px solid rgba(198,255,0,0.7)' : '1.5px solid rgba(198,255,0,0.35)',
-              background: activeTab==='builder' ? 'rgba(198,255,0,0.13)' : 'rgba(198,255,0,0.07)',
+              border: `1.5px solid ${showPatterns ? 'var(--lime)' : 'var(--lime-border)'}`,
+              background: showPatterns ? 'var(--lime-dim)' : 'transparent',
               display:'flex', alignItems:'center', gap:5,
               cursor:'pointer', transition:'all .15s',
-              color: activeTab==='builder' ? '#c6ff00' : 'rgba(198,255,0,0.7)',
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(198,255,0,0.7)';e.currentTarget.style.color='#c6ff00'}}
-            onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='builder'?'rgba(198,255,0,0.7)':'rgba(198,255,0,0.35)'
-              e.currentTarget.style.color=activeTab==='builder'?'#c6ff00':'rgba(198,255,0,0.7)'
+              color: showPatterns ? 'var(--lime)' : 'var(--lime-border)',
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transition: 'transform .2s', transform: showPatterns ? 'rotate(45deg)' : 'rotate(0deg)' }}>
               <circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>
               <line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
               <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="18" x2="16" y2="18"/>
@@ -818,10 +1004,10 @@ export default function App() {
             <span style={{fontSize:10,fontFamily:'var(--mono)',fontWeight:700,letterSpacing:'.04em'}}>PATTERNS</span>
           </button>
 
-          {/* Settings button — always visible in topbar */}
+          {/* Settings button */}
           <button
             onClick={() => navigateTo('settings')}
-            title="Settings"
+            title={activeTab === 'settings' ? 'Close Settings' : 'Settings'}
             style={{
               width:32, height:32, borderRadius:8, flexShrink:0,
               border: activeTab==='settings' ? '1.5px solid var(--accent)' : '1.5px solid var(--border2)',
@@ -829,11 +1015,6 @@ export default function App() {
               display:'flex', alignItems:'center', justifyContent:'center',
               cursor:'pointer', transition:'all .15s',
               color: activeTab==='settings' ? 'var(--accent)' : 'var(--text3)',
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
-            onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='settings'?'var(--accent)':'var(--border2)'
-              e.currentTarget.style.color=activeTab==='settings'?'var(--accent)':'var(--text3)'
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -894,7 +1075,7 @@ export default function App() {
         )}
         {activeTab === 'builder' && (
           <ErrorBoundary>
-            <PatternBuilderTab settings={settings} update={update} />
+            <PatternBuilderTab settings={settings} update={update} saveNowWithPatch={saveNowWithPatch} />
           </ErrorBoundary>
         )}
       </main>
@@ -902,12 +1083,26 @@ export default function App() {
       <nav className="bottom-nav-v2">
         {TF_TABS.map(tab => {
           const isActive = activeTab === tab.id
+          const isPatternActive = tab.isBuilder && showPatterns
           const count = (!tab.isSettings && !tab.isBuilder) ? (alertCounts[tab.id] || 0) : 0
           return (
-            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`} onClick={() => navigateTo(tab.id)}
-              style={{ color: isActive?tab.color:'var(--text3)',
-                background: isActive?`${tab.color}10`:'transparent',
-                borderTop: isActive?`2px solid ${tab.color}`:'2px solid transparent' }}>
+            <button
+              key={tab.id}
+              className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`}
+              onClick={() => {
+                if (tab.isBuilder) {
+                  // P tab: if patterns modal open, close it first
+                  if (showPatterns) { setShowPatterns(false); return }
+                  navigateTo('builder')
+                } else {
+                  navigateTo(tab.id)
+                }
+              }}
+              style={{
+                color: isActive ? tab.color : 'var(--text3)',
+                background: isActive ? `${tab.color}10` : 'transparent',
+                borderTop: isActive ? `2px solid ${tab.color}` : '2px solid transparent',
+              }}>
               {tab.isSettings ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{transition:'transform .3s',transform:isActive?'rotate(45deg)':'rotate(0deg)'}}>
@@ -918,7 +1113,7 @@ export default function App() {
                 <span style={{
                   fontFamily: 'Georgia, "Times New Roman", serif',
                   fontSize: 20, fontWeight: 900, lineHeight: 1,
-                  color: isActive ? '#c6ff00' : 'currentColor',
+                  color: isActive ? 'var(--lime)' : 'currentColor',
                   letterSpacing: '-1px',
                   display: 'block',
                 }}>P</span>
@@ -938,7 +1133,7 @@ export default function App() {
       {/* Patterns bottom sheet modal */}
       <PatternsModal
         open={showPatterns}
-        onClose={() => setShowPatterns(false)}
+        onClose={togglePatterns}
         settings={settings}
         update={update}
       />

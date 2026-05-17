@@ -3,25 +3,50 @@ import React, { useState, useMemo } from 'react'
 
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [
-  { id: 'close',     label: 'Close',      short: 'Close',  group: 'Price' },
-  { id: 'open',      label: 'Open',       short: 'Open',   group: 'Price' },
-  { id: 'high',      label: 'High',       short: 'High',   group: 'Price' },
-  { id: 'low',       label: 'Low',        short: 'Low',    group: 'Price' },
-  { id: 'volume',    label: 'Volume',     short: 'Vol',    group: 'Price' },
-  { id: 'ema9',      label: 'EMA 9',      short: 'EMA9',   group: 'EMA' },
-  { id: 'ema20',     label: 'EMA 20',     short: 'EMA20',  group: 'EMA' },
-  { id: 'ema40',     label: 'EMA 40',     short: 'EMA40',  group: 'EMA' },
-  { id: 'ema16',     label: 'EMA 16',     short: 'EMA16',  group: 'EMA' },
-  { id: 'ema25',     label: 'EMA 25',     short: 'EMA25',  group: 'EMA' },
-  { id: 'ema50',     label: 'EMA 50',     short: 'EMA50',  group: 'EMA' },
-  { id: 'rsi',       label: 'RSI 14',     short: 'RSI',    group: 'Indicator' },
-  { id: 'bodyPct',   label: 'Body %',     short: 'Body%',  group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
-  { id: 'body',      label: 'Body Size',  short: 'Body',   group: 'Calc', computed: c => Math.abs(c.close - c.open) },
-  { id: 'range',     label: 'Range H-L',  short: 'Range',  group: 'Calc', computed: c => c.high - c.low },
-  { id: 'upperWick', label: 'Upper Wick', short: 'UWick',  group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
-  { id: 'lowerWick', label: 'Lower Wick', short: 'LWick',  group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
-  { id: 'isGreen',   label: 'Is Green',   short: 'Green?', group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
-  { id: 'isRed',     label: 'Is Red',     short: 'Red?',   group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
+  // ── Price ──────────────────────────────────────────────────────────────────
+  { id: 'close',     label: 'Close',       short: 'Close',   group: 'Price' },
+  { id: 'open',      label: 'Open',        short: 'Open',    group: 'Price' },
+  { id: 'high',      label: 'High',        short: 'High',    group: 'Price' },
+  { id: 'low',       label: 'Low',         short: 'Low',     group: 'Price' },
+  { id: 'volume',    label: 'Volume',      short: 'Vol',     group: 'Price' },
+  // ── EMA (sorted by period) ─────────────────────────────────────────────────
+  { id: 'ema5',      label: 'EMA 5',       short: 'EMA5',    group: 'EMA' },
+  { id: 'ema9',      label: 'EMA 9',       short: 'EMA9',    group: 'EMA' },
+  { id: 'ema15',     label: 'EMA 15',      short: 'EMA15',   group: 'EMA' },
+  { id: 'ema16',     label: 'EMA 16',      short: 'EMA16',   group: 'EMA' },
+  { id: 'ema20',     label: 'EMA 20',      short: 'EMA20',   group: 'EMA' },
+  { id: 'ema25',     label: 'EMA 25',      short: 'EMA25',   group: 'EMA' },
+  { id: 'ema30',     label: 'EMA 30',      short: 'EMA30',   group: 'EMA' },
+  { id: 'ema40',     label: 'EMA 40',      short: 'EMA40',   group: 'EMA' },
+  { id: 'ema50',     label: 'EMA 50',      short: 'EMA50',   group: 'EMA' },
+  { id: 'ema60',     label: 'EMA 60',      short: 'EMA60',   group: 'EMA' },
+  { id: 'ema75',     label: 'EMA 75',      short: 'EMA75',   group: 'EMA' },
+  { id: 'ema80',     label: 'EMA 80',      short: 'EMA80',   group: 'EMA' },
+  { id: 'ema100',    label: 'EMA 100',     short: 'EMA100',  group: 'EMA' },
+  { id: 'ema120',    label: 'EMA 120',     short: 'EMA120',  group: 'EMA' },
+  { id: 'ema150',    label: 'EMA 150',     short: 'EMA150',  group: 'EMA' },
+  { id: 'ema200',    label: 'EMA 200',     short: 'EMA200',  group: 'EMA' },
+  { id: 'ema300',    label: 'EMA 300',     short: 'EMA300',  group: 'EMA' },
+  { id: 'ema600',    label: 'EMA 600',     short: 'EMA600',  group: 'EMA' },
+  // ── Indicator ──────────────────────────────────────────────────────────────
+  { id: 'rsi',       label: 'RSI 14',      short: 'RSI',     group: 'Indicator' },
+  { id: 'diPlus',    label: '+DI 14',      short: '+DI',     group: 'Indicator' },
+  { id: 'diMinus',   label: '-DI 14',      short: '-DI',     group: 'Indicator' },
+  { id: 'adx',       label: 'ADX 14',      short: 'ADX',     group: 'Indicator' },
+  // ── Calc ───────────────────────────────────────────────────────────────────
+  { id: 'changePct',  label: 'Change %',    short: 'Chg%',    group: 'Calc',
+    // (close[0] / close[-1] - 1) × 100  — needs prev candle; returns null if unavailable
+    computed: null, needsPrev: true },
+  { id: 'change24h',  label: '24h Change%', short: '24h%',    group: 'Calc',
+    // Binance 24h priceChangePercent — attached to last candle by fetchCandles when ticker passed
+    computed: c => c.change24h ?? null },
+  { id: 'bodyPct',   label: 'Body %',      short: 'Body%',   group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
+  { id: 'body',      label: 'Body Size',   short: 'Body',    group: 'Calc', computed: c => Math.abs(c.close - c.open) },
+  { id: 'range',     label: 'Range H-L',   short: 'Range',   group: 'Calc', computed: c => c.high - c.low },
+  { id: 'upperWick', label: 'Upper Wick',  short: 'UWick',   group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
+  { id: 'lowerWick', label: 'Lower Wick',  short: 'LWick',   group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
+  { id: 'isGreen',   label: 'Is Green',    short: 'Green?',  group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
+  { id: 'isRed',     label: 'Is Red',      short: 'Red?',    group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
 ]
 const FIELD_MAP = Object.fromEntries(FIELDS.map(f => [f.id, f]))
 const FIELD_GROUPS = FIELDS.reduce((g, f) => { (g[f.group] = g[f.group] || []).push(f); return g }, {})
@@ -36,6 +61,7 @@ const RHS_MODES = [
   { id: 'mult',    label: '× Mult',      hint: 'Field × multiplier  e.g. EMA20[-2] × 1.5' },
   { id: 'pct',     label: '± %',         hint: 'Field ± percent  e.g. EMA20[-2] + 0.35%' },
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
+  { id: 'slope',   label: 'Slope %',     hint: '(field[0] / field[-N] − 1) × 100 — how much the field rose over N candles' },
 ]
 
 // Range-check modes — condition applied to every candle in a window
@@ -91,8 +117,10 @@ function mirrorCond(cond) {
     ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
     : cond.rhsMult
 
-  // Invert pct: +0.5% → -0.5%
-  const rhsPct = cond.rhsPct != null ? -parseFloat(cond.rhsPct) : cond.rhsPct
+  // Invert numeric thresholds: +0.25 → -0.25
+  const rhsNum  = cond.rhsNum  != null ? -parseFloat(cond.rhsNum)  : cond.rhsNum
+  const rhsPct  = cond.rhsPct  != null ? -parseFloat(cond.rhsPct)  : cond.rhsPct
+  const slopeNum = cond.slopeNum != null ? -parseFloat(cond.slopeNum) : cond.slopeNum
 
   return {
     ...cond,
@@ -100,7 +128,9 @@ function mirrorCond(cond) {
     op: MIRROR_OP[cond.op] ?? cond.op,
     lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
     rhsMult,
+    rhsNum,
     rhsPct,
+    slopeNum,
     label: cond.label ? `Mirror of ${cond.label}` : '',
   }
 }
@@ -109,6 +139,18 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 // ── Formula label ─────────────────────────────────────────────────────────────
 export function condFormula(c) {
+  // Special label for needsPrev fields
+  function fieldLabel(fieldId, offset) {
+    const f = FIELD_MAP[fieldId]
+    if (!f) return fieldId
+    if (f.needsPrev) {
+      const o = offset === 0 ? '' : `[${offset}]`
+      return `${f.short}${o}`
+    }
+    const o = offset === 0 ? '' : `[${offset}]`
+    return `${f.short}${o}`
+  }
+
   const lhsF = FIELD_MAP[c.lhsField]?.short || c.lhsField
   const op   = c.op
 
@@ -128,6 +170,14 @@ export function condFormula(c) {
       return `${windowLabel} ${lhsF} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
     }
     if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+    if (c.rhsMode === 'slope') {
+      const n = c.slopeLen ?? 5
+      const sk = c.slopeSkip ?? 0
+      const thresh = c.slopeNum ?? 0
+      const s = thresh >= 0 ? '+' : ''
+      const from = sk > 0 ? `[-${sk}]` : '[0]'
+      return `${windowLabel} Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
+    }
     return `${windowLabel} ${lhsF} ${op} ?`
   }
 
@@ -147,6 +197,13 @@ export function condFormula(c) {
     return `${lhs} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
   }
   if (c.rhsMode === 'pctdiff') return `(${lhs}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+  if (c.rhsMode === 'slope') {
+    const n = c.slopeLen ?? 5
+    const sk = c.slopeSkip ?? 0
+    const thresh = c.slopeNum ?? 0
+    const s = thresh >= 0 ? '+' : ''
+    return `Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
+  }
   return `${lhs} ${op} ?`
 }
 
@@ -159,6 +216,7 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
+    slopeLen: 5, slopeSkip: 0, slopeNum: 0, // for slope mode: look-back candles, skip recent candles, threshold %
     // Range check (applies condition to every candle in a window)
     rangeCheck: false,
     rangeFrom: -1,   // start offset (most recent), e.g. -1
@@ -187,10 +245,20 @@ export function compilePattern(pattern) {
       const idx = len - 1 + offset
       return idx >= 0 ? candles[idx] : null
     }
-    function getVal(candle, fieldId) {
+    function getVal(candle, fieldId, candleIdx) {
       if (!candle) return null
       const f = FIELD_MAP[fieldId]
       if (!f) return null
+      // changePct: (close[i] / close[i-1] - 1) * 100
+      if (f.needsPrev) {
+        if (fieldId === 'changePct') {
+          const prevIdx = (candleIdx ?? (len - 1)) - 1
+          const prev = prevIdx >= 0 ? candles[prevIdx] : null
+          if (!prev || prev.close === 0) return null
+          return (candle.close / prev.close - 1) * 100
+        }
+        return null
+      }
       if (f.computed) return f.computed(candle)
       const v = candle[fieldId]
       return v == null ? null : v
@@ -209,18 +277,40 @@ export function compilePattern(pattern) {
         const results = []
         for (let off = start; off <= end; off++) {
           // Evaluate lhs at this offset, rhs at same offset (field-relative) or fixed
+          const absIdx = len - 1 + off
           const lhsCandle = getC(off)
           if (!lhsCandle) continue
-          const lhsV = getVal(lhsCandle, cond.lhsField)
+          const lhsV = getVal(lhsCandle, cond.lhsField, absIdx)
           if (lhsV == null) continue
 
           let rhsV
           if (cond.rhsMode === 'number') {
             rhsV = parseFloat(cond.rhsNum) || 0
+          } else if (cond.rhsMode === 'slope') {
+            const n  = Math.max(1, Math.round(cond.slopeLen ?? 5))
+            const sk = Math.max(0, Math.round(cond.slopeSkip ?? 0))
+            const nowCandle  = getC(off - sk)
+            const nowV       = getVal(nowCandle, cond.lhsField, len - 1 + off - sk)
+            const pastCandle = getC(off - sk - n)
+            const pastV      = getVal(pastCandle, cond.lhsField, len - 1 + off - sk - n)
+            if (nowV == null || pastV == null || pastV === 0) continue
+            const slopePct = (nowV / pastV - 1) * 100
+            const thresh   = parseFloat(cond.slopeNum) || 0
+            const op = OP_SYM[cond.op] || cond.op
+            let r
+            if (op === '>')  r = slopePct >  thresh
+            else if (op === '>=') r = slopePct >= thresh
+            else if (op === '<')  r = slopePct <  thresh
+            else if (op === '<=') r = slopePct <= thresh
+            else if (op === '==') r = Math.abs(slopePct - thresh) < 1e-9
+            else r = Math.abs(slopePct - thresh) >= 1e-9
+            results.push(r)
+            continue
           } else {
             // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
+            const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
             const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
-            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField)
+            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField, rhsAbsIdx)
             if (rhsBase == null) continue
             if (cond.rhsMode === 'field')   rhsV = rhsBase
             else if (cond.rhsMode === 'mult')  rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1)
@@ -257,16 +347,38 @@ export function compilePattern(pattern) {
       }
 
       // ── Standard single-candle check ──
-      const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField)
+      const lhsAbsIdx = len - 1 + (cond.lhsOffset ?? 0)
+      const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField, lhsAbsIdx)
       if (lhsV == null) return null
 
       let rhsV
-      const rhsBase = cond.rhsField ? getVal(getC(cond.rhsOffset ?? 0), cond.rhsField) : null
+      const rhsAbsIdx = len - 1 + (cond.rhsOffset ?? 0)
+      const rhsBase = cond.rhsField ? getVal(getC(cond.rhsOffset ?? 0), cond.rhsField, rhsAbsIdx) : null
 
       if (cond.rhsMode === 'number')  { rhsV = parseFloat(cond.rhsNum) || 0 }
       else if (cond.rhsMode === 'field')   { if (rhsBase == null) return null; rhsV = rhsBase }
       else if (cond.rhsMode === 'mult')    { if (rhsBase == null) return null; rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1) }
       else if (cond.rhsMode === 'pct')     { if (rhsBase == null) return null; rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100) }
+      else if (cond.rhsMode === 'slope') {
+        const n  = Math.max(1, Math.round(cond.slopeLen ?? 5))
+        const sk = Math.max(0, Math.round(cond.slopeSkip ?? 0))
+        const nowAbsIdx  = lhsAbsIdx - sk
+        const pastAbsIdx = lhsAbsIdx - sk - n
+        const nowCandle  = nowAbsIdx  >= 0 ? candles[nowAbsIdx]  : null
+        const pastCandle = pastAbsIdx >= 0 ? candles[pastAbsIdx] : null
+        const nowV  = getVal(nowCandle,  cond.lhsField, nowAbsIdx)
+        const pastV = getVal(pastCandle, cond.lhsField, pastAbsIdx)
+        if (nowV == null || pastV == null || pastV === 0) return null
+        const slopePct = (nowV / pastV - 1) * 100
+        const thresh   = parseFloat(cond.slopeNum) || 0
+        const op = OP_SYM[cond.op] || cond.op
+        if (op === '>')  return slopePct >  thresh
+        if (op === '>=') return slopePct >= thresh
+        if (op === '<')  return slopePct <  thresh
+        if (op === '<=') return slopePct <= thresh
+        if (op === '==') return Math.abs(slopePct - thresh) < 1e-9
+        return Math.abs(slopePct - thresh) >= 1e-9
+      }
       else if (cond.rhsMode === 'pctdiff') {
         if (rhsBase == null || rhsBase === 0) return null
         const diff = (lhsV / rhsBase - 1) * 100
@@ -411,8 +523,7 @@ function JoinBadge({ value, onChange }) {
 }
 
 // ── Condition card ────────────────────────────────────────────────────────────
-function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown }) {
-  const [open, setOpen] = useState(true)
+function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown, open, onToggleOpen }) {
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
 
@@ -439,7 +550,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
         }} />
 
         {/* Formula — tap to expand */}
-        <div onClick={() => setOpen(o => !o)} style={{
+        <div onClick={onToggleOpen} style={{
           flex: 1, fontFamily: 'var(--mono)', fontWeight: 700,
           fontSize: 11, color: cond.enabled ? color : 'var(--text3)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -455,7 +566,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
           <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
         </div>
-        <span onClick={() => setOpen(o => !o)} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
+        <span onClick={onToggleOpen} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
           {open ? '▲' : '▼'}
         </span>
       </div>
@@ -654,6 +765,95 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 </div>
               </div>
             )}
+
+
+            {cond.rhsMode === 'slope' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {/* Which field to measure slope of — same as LHS, just show info */}
+                <div style={{
+                  fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)',
+                  padding: '6px 9px', borderRadius: 7, background: 'rgba(0,0,0,0.18)',
+                }}>
+                  📐 Measures slope of <b style={{ color }}>{FIELD_MAP[cond.lhsField]?.short || cond.lhsField}</b> (same as LEFT field)
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Lbl>LOOK-BACK CANDLES</Lbl>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, color,
+                        background: `${color}20`, border: `1px solid ${color}40`,
+                        borderRadius: 5, padding: '1px 7px', fontFamily: 'var(--mono)',
+                      }}>{cond.slopeLen ?? 5}</span>
+                    </div>
+                    <input
+                      type="range" min={1} max={20} step={1}
+                      value={cond.slopeLen ?? 5}
+                      onChange={e => s('slopeLen', parseInt(e.target.value))}
+                      style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                      <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Lbl>SKIP RECENT CANDLES</Lbl>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700,
+                        color: (cond.slopeSkip ?? 0) > 0 ? color : 'var(--text3)',
+                        background: (cond.slopeSkip ?? 0) > 0 ? `${color}20` : 'rgba(0,0,0,0.18)',
+                        border: `1px solid ${(cond.slopeSkip ?? 0) > 0 ? color + '40' : 'var(--border)'}`,
+                        borderRadius: 5, padding: '1px 7px', fontFamily: 'var(--mono)',
+                      }}>{cond.slopeSkip ?? 0}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={1}
+                      value={cond.slopeSkip ?? 0}
+                      onChange={e => s('slopeSkip', parseInt(e.target.value))}
+                      style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                      <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Lbl>THRESHOLD %</Lbl>
+                    <NInput
+                      value={cond.slopeNum ?? 0}
+                      onChange={v => s('slopeNum', v)}
+                      step="0.01" suffix="%" w={80}
+                    />
+                  </div>
+                </div>
+
+                {/* Live explanation */}
+                <div style={{
+                  fontSize: 9, fontFamily: 'var(--mono)', color: color,
+                  padding: '6px 9px', borderRadius: 6,
+                  background: `${color}10`, border: `1px solid ${color}25`,
+                  lineHeight: 1.7,
+                }}>
+                  {(() => {
+                    const sk = cond.slopeSkip ?? 0
+                    const n  = cond.slopeLen ?? 5
+                    const f  = FIELD_MAP[cond.lhsField]?.short
+                    const nowRef  = sk > 0 ? `[-${sk}]` : '[0]'
+                    const pastRef = `[-${sk + n}]`
+                    return <>
+                      <b>Slope</b> = ({f}{nowRef} / {f}{pastRef} − 1) × 100
+                      {sk > 0 && <span style={{ color: 'var(--text3)' }}> &nbsp;·&nbsp; skipping {sk} recent candle{sk > 1 ? 's' : ''}</span>}<br/>
+                      → <b>{f}{nowRef} vs {f}{pastRef} over {n} candles</b><br/>
+                      <span style={{ opacity: .7 }}>
+                        Bullish slope: op <b>&gt;</b> threshold <b>0</b> or <b>0.3</b> &nbsp;·&nbsp;
+                        Bearish slope: op <b>&lt;</b> threshold <b>0</b> or <b>-0.3</b>
+                      </span>
+                    </>
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Live formula */}
@@ -781,6 +981,7 @@ function IconPicker({ value, onChange, color }) {
 // ── Pattern editor ────────────────────────────────────────────────────────────
 function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen, allPatternNames }) {
   const [open, setOpen] = useState(!!defaultOpen)
+  const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [mirrorPopup, setMirrorPopup] = useState(false)
   const [mirrorName, setMirrorName] = useState('')
@@ -828,8 +1029,10 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   function delCond(i)    { s('conditions', pattern.conditions.filter((_,j) => j !== i)) }
   function copyCond(i)   {
     const cs = [...pattern.conditions]
-    cs.splice(i + 1, 0, { ...cs[i], id: uid() })
+    const newCond = { ...cs[i], id: uid() }
+    cs.splice(i + 1, 0, newCond)
     s('conditions', cs)
+    setOpenCondIds(prev => new Set([...prev, newCond.id]))
   }
   function moveCond(from, to) {
     const cs = [...pattern.conditions]
@@ -1050,10 +1253,16 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
                   <CondCard
                     cond={cond} idx={idx} total={pattern.conditions.length} color={condColor(idx)}
                     onChange={c => setCond(idx, c)}
-                    onRemove={() => delCond(idx)}
+                    onRemove={() => { delCond(idx); setOpenCondIds(prev => { const s = new Set(prev); s.delete(cond.id); return s }) }}
                     onCopy={() => copyCond(idx)}
                     onMoveUp={() => moveCond(idx, idx - 1)}
                     onMoveDown={() => moveCond(idx, idx + 1)}
+                    open={openCondIds.has(cond.id)}
+                    onToggleOpen={() => setOpenCondIds(prev => {
+                      const s = new Set(prev)
+                      s.has(cond.id) ? s.delete(cond.id) : s.add(cond.id)
+                      return s
+                    })}
                   />
                   {idx < pattern.conditions.length - 1 && (
                     <JoinBadge value={cond.joinNext || 'AND'} onChange={v => setJoin(idx, v)} />
@@ -1063,7 +1272,11 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
             </div>
 
             <button
-              onClick={() => s('conditions', [...pattern.conditions, blankCond()])}
+              onClick={() => {
+                const nc = blankCond()
+                s('conditions', [...pattern.conditions, nc])
+                setOpenCondIds(prev => new Set([...prev, nc.id]))
+              }}
               style={{
                 marginTop: 8, width: '100%', padding: '9px',
                 borderRadius: 8, cursor: 'pointer', fontSize: 12,
@@ -1081,14 +1294,22 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
-export default function PatternBuilderTab({ settings, update }) {
+export default function PatternBuilderTab({ settings, update, saveNowWithPatch }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
   const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
 
-  function savePatterns(ps) { update({ customPatterns: ps }) }
-  function saveTrash(ts)    { update({ deletedPatterns: ts }) }
+  function savePatterns(ps) {
+    const now = Date.now()
+    update({ customPatterns: ps, _customPatternsAt: now })
+    saveNowWithPatch?.({ customPatterns: ps, _customPatternsAt: now })
+  }
+  function saveTrash(ts) {
+    const now = Date.now()
+    update({ deletedPatterns: ts, _deletedPatternsAt: now })
+    saveNowWithPatch?.({ deletedPatterns: ts, _deletedPatternsAt: now })
+  }
 
   function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
   function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
@@ -1162,13 +1383,16 @@ export default function PatternBuilderTab({ settings, update }) {
         <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
         <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
         <b>% Diff</b>: how many % LHS is above/below RHS<br/>
+        <b>Slope %</b>: how much field rose over N candles &nbsp;·&nbsp; bullish = op &gt; 0 &nbsp;·&nbsp; bearish = op &lt; 0<br/>
+        <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
+        <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
       </div>
 
       {/* List — "My Patterns" section */}
       {patterns.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c6ff00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4, marginBottom: 10 }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--lime)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4, marginBottom: 10 }}>
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
           <div style={{ fontSize: 13 }}>No custom patterns yet</div>
@@ -1177,11 +1401,11 @@ export default function PatternBuilderTab({ settings, update }) {
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
-            <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: '#c6ff00', opacity: .8 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
+            <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: 'var(--lime)', opacity: .8 }}>
               MY PATTERNS
             </span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
             {patterns.map((p, i) => (
@@ -1200,12 +1424,12 @@ export default function PatternBuilderTab({ settings, update }) {
       <button onClick={add} style={{
         width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
         fontSize: 13, fontFamily: 'var(--mono)', fontWeight: 800,
-        border: '2px dashed rgba(198,255,0,0.35)',
-        background: 'rgba(198,255,0,0.05)', color: '#c6ff00',
+        border: '2px dashed var(--lime-border)',
+        background: 'var(--lime-dim)', color: 'var(--lime)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(198,255,0,0.1)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(198,255,0,0.05)'}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--lime-dim)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'var(--lime-dim)'}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>

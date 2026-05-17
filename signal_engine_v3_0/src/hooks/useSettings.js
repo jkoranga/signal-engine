@@ -35,6 +35,9 @@ export const DEFAULTS = {
   wickTouchPct:  1.5,
   scoreFilterEnabled: false,
   scoreMin:           5,
+  // Timestamps to resolve cloud vs local conflicts for pattern fields
+  _customPatternsAt:  0,
+  _deletedPatternsAt: 0,
 }
 
 function load() {
@@ -53,6 +56,9 @@ export function useSettings(firebaseUser) {
   const [cloudSaving, setCloudSaving] = useState(false)
   const saveTimeoutRef = useRef(null)
   const prevUidRef = useRef(null)
+  // Track updates that happen while cloud load is in-flight
+  const cloudLoadingRef = useRef(false)
+  const localUpdatedDuringLoadRef = useRef(false)
 
   // Persist to localStorage
   useEffect(() => {
@@ -65,10 +71,35 @@ export function useSettings(firebaseUser) {
     if (!uid || uid === prevUidRef.current) return
     prevUidRef.current = uid
     setCloudSynced(false)
+    cloudLoadingRef.current = true
+    localUpdatedDuringLoadRef.current = false
     loadSettingsFromCloud(uid).then(cloud => {
+      cloudLoadingRef.current = false
       if (cloud) {
         const { _savedAt, ...clean } = cloud
-        setSettings(prev => ({ ...prev, ...clean }))
+        setSettings(prev => {
+          const merged = { ...prev, ...clean }
+
+          // Always keep whichever version of customPatterns is newer.
+          // _customPatternsAt is a timestamp written every time patterns are saved.
+          const localPatternsAt = prev._customPatternsAt  || 0
+          const cloudPatternsAt = clean._customPatternsAt || 0
+          if (localPatternsAt >= cloudPatternsAt) {
+            // Local is same age or newer — keep local patterns
+            merged.customPatterns    = prev.customPatterns
+            merged._customPatternsAt = prev._customPatternsAt
+          }
+
+          // Same treatment for deleted/trash patterns
+          const localTrashAt = prev._deletedPatternsAt  || 0
+          const cloudTrashAt = clean._deletedPatternsAt || 0
+          if (localTrashAt >= cloudTrashAt) {
+            merged.deletedPatterns    = prev.deletedPatterns
+            merged._deletedPatternsAt = prev._deletedPatternsAt
+          }
+
+          return merged
+        })
         setCloudSynced(true)
       }
     })
@@ -79,6 +110,9 @@ export function useSettings(firebaseUser) {
   }, [firebaseUser])
 
   const update = useCallback((patch) => {
+    if (cloudLoadingRef.current) {
+      localUpdatedDuringLoadRef.current = true
+    }
     setSettings(prev => typeof patch === 'function' ? patch(prev) : { ...prev, ...patch })
   }, [])
 
@@ -107,6 +141,20 @@ export function useSettings(firebaseUser) {
     return ok
   }, [firebaseUser, settings])
 
+  // Save immediately with a patch merged in — use this when you need to save
+  // right after update() before React has flushed the new state
+  const saveNowWithPatch = useCallback(async (patch) => {
+    const uid = firebaseUser?.uid
+    if (!uid) return false
+    clearTimeout(saveTimeoutRef.current)
+    setCloudSaving(true)
+    const merged = { ...settings, ...patch }
+    const ok = await saveSettingsToCloud(uid, merged)
+    if (ok) setCloudSynced(true)
+    setCloudSaving(false)
+    return ok
+  }, [firebaseUser, settings])
+
   const updateNested = useCallback((key, patch) => {
     setSettings(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
   }, [])
@@ -116,5 +164,5 @@ export function useSettings(firebaseUser) {
     setSettings(DEFAULTS)
   }, [])
 
-  return { settings, update, updateNested, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit: isFirstVisit.current }
+  return { settings, update, updateNested, reset, cloudSynced, cloudSaving, saveNow, saveNowWithPatch, isFirstVisit: isFirstVisit.current }
 }
