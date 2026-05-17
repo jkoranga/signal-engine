@@ -699,6 +699,7 @@ export default function App() {
   const [scanProgress,   setScanProgress]   = useState({ pct: -1, color: 'var(--green)' })
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
   const [showPatterns, setShowPatterns] = useState(false)
+  const [prevTab, setPrevTab] = useState('15m')
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -734,10 +735,28 @@ export default function App() {
     setScanProgress({ pct, color })
   }, [])
 
-  // Wrap tab navigation — counts each Settings visit to collapse accordions
   function navigateTo(tab) {
-    if (tab === 'settings') setSettingsOpenCount(c => c + 1)
+    if (tab === 'settings') {
+      if (activeTab === 'settings') {
+        // toggle off — go back to previous tab
+        setActiveTab(prevTab)
+        return
+      }
+      setPrevTab(activeTab)
+      setSettingsOpenCount(c => c + 1)
+    }
+    if (tab === 'builder') {
+      if (activeTab === 'builder') {
+        setActiveTab(prevTab)
+        return
+      }
+      setPrevTab(activeTab)
+    }
     setActiveTab(tab)
+  }
+
+  function togglePatterns() {
+    setShowPatterns(v => !v)
   }
 
   const activeTabCfg = TF_TABS.find(t => t.id === activeTab)
@@ -794,23 +813,19 @@ export default function App() {
         <div style={{ display:'flex',alignItems:'center',gap:6,marginLeft:'auto' }}>
           {/* Patterns button — jumps directly to Patterns accordion in Settings */}
           <button
-            onClick={() => setShowPatterns(true)}
-            title="Patterns"
+            onClick={togglePatterns}
+            title={showPatterns ? 'Close Patterns' : 'Open Patterns'}
             style={{
               height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
-              border: activeTab==='builder' ? '1.5px solid var(--lime-border)' : '1.5px solid var(--lime-border)',
-              background: activeTab==='builder' ? 'var(--lime-dim)' : 'var(--lime-dim)',
+              border: `1.5px solid ${showPatterns ? 'var(--lime)' : 'var(--lime-border)'}`,
+              background: showPatterns ? 'var(--lime-dim)' : 'transparent',
               display:'flex', alignItems:'center', gap:5,
               cursor:'pointer', transition:'all .15s',
-              color: activeTab==='builder' ? 'var(--lime)' : 'var(--lime-border)',
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--lime-border)';e.currentTarget.style.color='var(--lime)'}}
-            onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='builder'?'var(--lime-border)':'var(--lime-border)'
-              e.currentTarget.style.color=activeTab==='builder'?'var(--lime)':'var(--lime-border)'
+              color: showPatterns ? 'var(--lime)' : 'var(--lime-border)',
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transition: 'transform .2s', transform: showPatterns ? 'rotate(45deg)' : 'rotate(0deg)' }}>
               <circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>
               <line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/>
               <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="18" x2="16" y2="18"/>
@@ -818,10 +833,10 @@ export default function App() {
             <span style={{fontSize:10,fontFamily:'var(--mono)',fontWeight:700,letterSpacing:'.04em'}}>PATTERNS</span>
           </button>
 
-          {/* Settings button — always visible in topbar */}
+          {/* Settings button */}
           <button
             onClick={() => navigateTo('settings')}
-            title="Settings"
+            title={activeTab === 'settings' ? 'Close Settings' : 'Settings'}
             style={{
               width:32, height:32, borderRadius:8, flexShrink:0,
               border: activeTab==='settings' ? '1.5px solid var(--accent)' : '1.5px solid var(--border2)',
@@ -829,11 +844,6 @@ export default function App() {
               display:'flex', alignItems:'center', justifyContent:'center',
               cursor:'pointer', transition:'all .15s',
               color: activeTab==='settings' ? 'var(--accent)' : 'var(--text3)',
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
-            onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='settings'?'var(--accent)':'var(--border2)'
-              e.currentTarget.style.color=activeTab==='settings'?'var(--accent)':'var(--text3)'
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -902,12 +912,26 @@ export default function App() {
       <nav className="bottom-nav-v2">
         {TF_TABS.map(tab => {
           const isActive = activeTab === tab.id
+          const isPatternActive = tab.isBuilder && showPatterns
           const count = (!tab.isSettings && !tab.isBuilder) ? (alertCounts[tab.id] || 0) : 0
           return (
-            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`} onClick={() => navigateTo(tab.id)}
-              style={{ color: isActive?tab.color:'var(--text3)',
-                background: isActive?`${tab.color}10`:'transparent',
-                borderTop: isActive?`2px solid ${tab.color}`:'2px solid transparent' }}>
+            <button
+              key={tab.id}
+              className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`}
+              onClick={() => {
+                if (tab.isBuilder) {
+                  // P tab: if patterns modal open, close it first
+                  if (showPatterns) { setShowPatterns(false); return }
+                  navigateTo('builder')
+                } else {
+                  navigateTo(tab.id)
+                }
+              }}
+              style={{
+                color: isActive ? tab.color : 'var(--text3)',
+                background: isActive ? `${tab.color}10` : 'transparent',
+                borderTop: isActive ? `2px solid ${tab.color}` : '2px solid transparent',
+              }}>
               {tab.isSettings ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{transition:'transform .3s',transform:isActive?'rotate(45deg)':'rotate(0deg)'}}>
@@ -938,7 +962,7 @@ export default function App() {
       {/* Patterns bottom sheet modal */}
       <PatternsModal
         open={showPatterns}
-        onClose={() => setShowPatterns(false)}
+        onClose={togglePatterns}
         settings={settings}
         update={update}
       />
