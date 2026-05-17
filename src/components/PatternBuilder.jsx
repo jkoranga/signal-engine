@@ -117,10 +117,9 @@ function mirrorCond(cond) {
     ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
     : cond.rhsMult
 
-  // Invert pct: +0.5% → -0.5%
-  const rhsPct = cond.rhsPct != null ? -parseFloat(cond.rhsPct) : cond.rhsPct
-
-  // Invert slope threshold: +0.015% → -0.015%
+  // Invert numeric thresholds: +0.25 → -0.25
+  const rhsNum  = cond.rhsNum  != null ? -parseFloat(cond.rhsNum)  : cond.rhsNum
+  const rhsPct  = cond.rhsPct  != null ? -parseFloat(cond.rhsPct)  : cond.rhsPct
   const slopeNum = cond.slopeNum != null ? -parseFloat(cond.slopeNum) : cond.slopeNum
 
   return {
@@ -129,6 +128,7 @@ function mirrorCond(cond) {
     op: MIRROR_OP[cond.op] ?? cond.op,
     lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
     rhsMult,
+    rhsNum,
     rhsPct,
     slopeNum,
     label: cond.label ? `Mirror of ${cond.label}` : '',
