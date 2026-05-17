@@ -22,16 +22,28 @@ export async function fetchCandles(symbol, interval = '15m', limit = 60) {
         close: parseFloat(c),
         volume: parseFloat(v),
       }))
-      // Attach EMA10 and RSI14 to each candle
+      // Attach EMAs (all periods) + RSI14 + DMI/ADX(14)
       attachEMA(candles, 10)
-      attachEMAn(candles, 9,  'ema9')
-      attachEMAn(candles, 20, 'ema20')
-      attachEMAn(candles, 40, 'ema40')
-      attachEMAn(candles, 16, 'ema16')
-      attachEMAn(candles, 25, 'ema25')
-      attachEMAn(candles, 50, 'ema50')
-      attachEMAn(candles, 80, 'ema80')
+      attachEMAn(candles,   5, 'ema5')
+      attachEMAn(candles,   9, 'ema9')
+      attachEMAn(candles,  15, 'ema15')
+      attachEMAn(candles,  16, 'ema16')
+      attachEMAn(candles,  20, 'ema20')
+      attachEMAn(candles,  25, 'ema25')
+      attachEMAn(candles,  30, 'ema30')
+      attachEMAn(candles,  40, 'ema40')
+      attachEMAn(candles,  50, 'ema50')
+      attachEMAn(candles,  60, 'ema60')
+      attachEMAn(candles,  75, 'ema75')
+      attachEMAn(candles,  80, 'ema80')
+      attachEMAn(candles, 100, 'ema100')
+      attachEMAn(candles, 120, 'ema120')
+      attachEMAn(candles, 150, 'ema150')
+      attachEMAn(candles, 200, 'ema200')
+      attachEMAn(candles, 300, 'ema300')
+      attachEMAn(candles, 600, 'ema600')
       attachRSI(candles, 14)
+      attachDMI(candles, 14)
       return candles
     } catch { /* try next mirror */ }
   }
@@ -96,6 +108,83 @@ export function attachEMAn(candles, period, key) {
       ema = candles[i].close * k + ema * (1 - k)
       candles[i][key] = ema
     }
+  }
+}
+
+// ─── DMI / ADX computation ────────────────────────────────────────────────────
+// Attaches .diPlus, .diMinus, .adx to each candle (Wilder smoothing, period=14)
+export function attachDMI(candles, period = 14) {
+  if (!candles || candles.length < period + 1) return
+
+  // Step 1 — raw directional movement and true range
+  const dmPlus  = new Array(candles.length).fill(0)
+  const dmMinus = new Array(candles.length).fill(0)
+  const trArr   = new Array(candles.length).fill(0)
+
+  for (let i = 1; i < candles.length; i++) {
+    const curr = candles[i]
+    const prev = candles[i - 1]
+    const upMove   = curr.high - prev.high
+    const downMove = prev.low  - curr.low
+    dmPlus[i]  = (upMove > downMove && upMove > 0)   ? upMove   : 0
+    dmMinus[i] = (downMove > upMove && downMove > 0) ? downMove : 0
+    trArr[i]   = Math.max(
+      curr.high - curr.low,
+      Math.abs(curr.high - prev.close),
+      Math.abs(curr.low  - prev.close)
+    )
+  }
+
+  // Step 2 — Wilder smoothing over first `period` bars
+  let smDmPlus  = dmPlus.slice(1, period + 1).reduce((s, v) => s + v, 0)
+  let smDmMinus = dmMinus.slice(1, period + 1).reduce((s, v) => s + v, 0)
+  let smTr      = trArr.slice(1, period + 1).reduce((s, v) => s + v, 0)
+
+  // Step 3 — fill nulls for warmup candles
+  for (let i = 0; i <= period; i++) {
+    candles[i].diPlus  = null
+    candles[i].diMinus = null
+    candles[i].adx     = null
+  }
+
+  // Step 4 — compute DI+ / DI- for each candle after warmup
+  const diPlusArr  = new Array(candles.length).fill(null)
+  const diMinusArr = new Array(candles.length).fill(null)
+
+  candles[period].diPlus  = smTr > 0 ? (smDmPlus  / smTr) * 100 : 0
+  candles[period].diMinus = smTr > 0 ? (smDmMinus / smTr) * 100 : 0
+  diPlusArr[period]  = candles[period].diPlus
+  diMinusArr[period] = candles[period].diMinus
+
+  for (let i = period + 1; i < candles.length; i++) {
+    smDmPlus  = smDmPlus  - smDmPlus  / period + dmPlus[i]
+    smDmMinus = smDmMinus - smDmMinus / period + dmMinus[i]
+    smTr      = smTr      - smTr      / period + trArr[i]
+    candles[i].diPlus  = smTr > 0 ? (smDmPlus  / smTr) * 100 : 0
+    candles[i].diMinus = smTr > 0 ? (smDmMinus / smTr) * 100 : 0
+    diPlusArr[i]  = candles[i].diPlus
+    diMinusArr[i] = candles[i].diMinus
+  }
+
+  // Step 5 — compute DX then smooth into ADX (Wilder, second pass)
+  const dxArr = new Array(candles.length).fill(null)
+  for (let i = period; i < candles.length; i++) {
+    const sum = diPlusArr[i] + diMinusArr[i]
+    dxArr[i]  = sum > 0 ? Math.abs(diPlusArr[i] - diMinusArr[i]) / sum * 100 : 0
+  }
+
+  // First ADX = simple avg of first `period` DX values starting at index `period`
+  const adxStart = period * 2  // need period DX values (DX starts at index `period`)
+  if (candles.length <= adxStart) return
+
+  let adx = 0
+  for (let i = period; i < adxStart; i++) adx += dxArr[i]
+  adx /= period
+  candles[adxStart - 1].adx = adx
+
+  for (let i = adxStart; i < candles.length; i++) {
+    adx = (adx * (period - 1) + dxArr[i]) / period
+    candles[i].adx = adx
   }
 }
 

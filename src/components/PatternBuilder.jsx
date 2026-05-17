@@ -3,25 +3,44 @@ import React, { useState, useMemo } from 'react'
 
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [
-  { id: 'close',     label: 'Close',      short: 'Close',  group: 'Price' },
-  { id: 'open',      label: 'Open',       short: 'Open',   group: 'Price' },
-  { id: 'high',      label: 'High',       short: 'High',   group: 'Price' },
-  { id: 'low',       label: 'Low',        short: 'Low',    group: 'Price' },
-  { id: 'volume',    label: 'Volume',     short: 'Vol',    group: 'Price' },
-  { id: 'ema9',      label: 'EMA 9',      short: 'EMA9',   group: 'EMA' },
-  { id: 'ema20',     label: 'EMA 20',     short: 'EMA20',  group: 'EMA' },
-  { id: 'ema40',     label: 'EMA 40',     short: 'EMA40',  group: 'EMA' },
-  { id: 'ema16',     label: 'EMA 16',     short: 'EMA16',  group: 'EMA' },
-  { id: 'ema25',     label: 'EMA 25',     short: 'EMA25',  group: 'EMA' },
-  { id: 'ema50',     label: 'EMA 50',     short: 'EMA50',  group: 'EMA' },
-  { id: 'rsi',       label: 'RSI 14',     short: 'RSI',    group: 'Indicator' },
-  { id: 'bodyPct',   label: 'Body %',     short: 'Body%',  group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
-  { id: 'body',      label: 'Body Size',  short: 'Body',   group: 'Calc', computed: c => Math.abs(c.close - c.open) },
-  { id: 'range',     label: 'Range H-L',  short: 'Range',  group: 'Calc', computed: c => c.high - c.low },
-  { id: 'upperWick', label: 'Upper Wick', short: 'UWick',  group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
-  { id: 'lowerWick', label: 'Lower Wick', short: 'LWick',  group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
-  { id: 'isGreen',   label: 'Is Green',   short: 'Green?', group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
-  { id: 'isRed',     label: 'Is Red',     short: 'Red?',   group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
+  // ── Price ──────────────────────────────────────────────────────────────────
+  { id: 'close',     label: 'Close',       short: 'Close',   group: 'Price' },
+  { id: 'open',      label: 'Open',        short: 'Open',    group: 'Price' },
+  { id: 'high',      label: 'High',        short: 'High',    group: 'Price' },
+  { id: 'low',       label: 'Low',         short: 'Low',     group: 'Price' },
+  { id: 'volume',    label: 'Volume',      short: 'Vol',     group: 'Price' },
+  // ── EMA (sorted by period) ─────────────────────────────────────────────────
+  { id: 'ema5',      label: 'EMA 5',       short: 'EMA5',    group: 'EMA' },
+  { id: 'ema9',      label: 'EMA 9',       short: 'EMA9',    group: 'EMA' },
+  { id: 'ema15',     label: 'EMA 15',      short: 'EMA15',   group: 'EMA' },
+  { id: 'ema16',     label: 'EMA 16',      short: 'EMA16',   group: 'EMA' },
+  { id: 'ema20',     label: 'EMA 20',      short: 'EMA20',   group: 'EMA' },
+  { id: 'ema25',     label: 'EMA 25',      short: 'EMA25',   group: 'EMA' },
+  { id: 'ema30',     label: 'EMA 30',      short: 'EMA30',   group: 'EMA' },
+  { id: 'ema40',     label: 'EMA 40',      short: 'EMA40',   group: 'EMA' },
+  { id: 'ema50',     label: 'EMA 50',      short: 'EMA50',   group: 'EMA' },
+  { id: 'ema60',     label: 'EMA 60',      short: 'EMA60',   group: 'EMA' },
+  { id: 'ema75',     label: 'EMA 75',      short: 'EMA75',   group: 'EMA' },
+  { id: 'ema80',     label: 'EMA 80',      short: 'EMA80',   group: 'EMA' },
+  { id: 'ema100',    label: 'EMA 100',     short: 'EMA100',  group: 'EMA' },
+  { id: 'ema120',    label: 'EMA 120',     short: 'EMA120',  group: 'EMA' },
+  { id: 'ema150',    label: 'EMA 150',     short: 'EMA150',  group: 'EMA' },
+  { id: 'ema200',    label: 'EMA 200',     short: 'EMA200',  group: 'EMA' },
+  { id: 'ema300',    label: 'EMA 300',     short: 'EMA300',  group: 'EMA' },
+  { id: 'ema600',    label: 'EMA 600',     short: 'EMA600',  group: 'EMA' },
+  // ── Indicator ──────────────────────────────────────────────────────────────
+  { id: 'rsi',       label: 'RSI 14',      short: 'RSI',     group: 'Indicator' },
+  { id: 'diPlus',    label: '+DI 14',      short: '+DI',     group: 'Indicator' },
+  { id: 'diMinus',   label: '-DI 14',      short: '-DI',     group: 'Indicator' },
+  { id: 'adx',       label: 'ADX 14',      short: 'ADX',     group: 'Indicator' },
+  // ── Calc ───────────────────────────────────────────────────────────────────
+  { id: 'bodyPct',   label: 'Body %',      short: 'Body%',   group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
+  { id: 'body',      label: 'Body Size',   short: 'Body',    group: 'Calc', computed: c => Math.abs(c.close - c.open) },
+  { id: 'range',     label: 'Range H-L',   short: 'Range',   group: 'Calc', computed: c => c.high - c.low },
+  { id: 'upperWick', label: 'Upper Wick',  short: 'UWick',   group: 'Calc', computed: c => c.high - Math.max(c.close, c.open) },
+  { id: 'lowerWick', label: 'Lower Wick',  short: 'LWick',   group: 'Calc', computed: c => Math.min(c.close, c.open) - c.low },
+  { id: 'isGreen',   label: 'Is Green',    short: 'Green?',  group: 'Calc', computed: c => c.close > c.open ? 1 : 0 },
+  { id: 'isRed',     label: 'Is Red',      short: 'Red?',    group: 'Calc', computed: c => c.close < c.open ? 1 : 0 },
 ]
 const FIELD_MAP = Object.fromEntries(FIELDS.map(f => [f.id, f]))
 const FIELD_GROUPS = FIELDS.reduce((g, f) => { (g[f.group] = g[f.group] || []).push(f); return g }, {})
@@ -1162,6 +1181,7 @@ export default function PatternBuilderTab({ settings, update }) {
         <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
         <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
         <b>% Diff</b>: how many % LHS is above/below RHS<br/>
+        <b>DMI/ADX</b>: +DI &gt; -DI = bullish trend &nbsp;·&nbsp; ADX &gt; 25 = strong trend &nbsp;·&nbsp; ADX &gt; 20 = trending<br/>
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
       </div>
 
