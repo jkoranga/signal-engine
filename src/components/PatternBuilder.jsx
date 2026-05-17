@@ -519,8 +519,7 @@ function JoinBadge({ value, onChange }) {
 }
 
 // ── Condition card ────────────────────────────────────────────────────────────
-function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown }) {
-  const [open, setOpen] = useState(true)
+function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown, open, onToggleOpen }) {
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
 
@@ -547,7 +546,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
         }} />
 
         {/* Formula — tap to expand */}
-        <div onClick={() => setOpen(o => !o)} style={{
+        <div onClick={onToggleOpen} style={{
           flex: 1, fontFamily: 'var(--mono)', fontWeight: 700,
           fontSize: 11, color: cond.enabled ? color : 'var(--text3)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -563,7 +562,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
           <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
         </div>
-        <span onClick={() => setOpen(o => !o)} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
+        <span onClick={onToggleOpen} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
           {open ? '▲' : '▼'}
         </span>
       </div>
@@ -978,6 +977,7 @@ function IconPicker({ value, onChange, color }) {
 // ── Pattern editor ────────────────────────────────────────────────────────────
 function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen, allPatternNames }) {
   const [open, setOpen] = useState(!!defaultOpen)
+  const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [mirrorPopup, setMirrorPopup] = useState(false)
   const [mirrorName, setMirrorName] = useState('')
@@ -1025,8 +1025,10 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   function delCond(i)    { s('conditions', pattern.conditions.filter((_,j) => j !== i)) }
   function copyCond(i)   {
     const cs = [...pattern.conditions]
-    cs.splice(i + 1, 0, { ...cs[i], id: uid() })
+    const newCond = { ...cs[i], id: uid() }
+    cs.splice(i + 1, 0, newCond)
     s('conditions', cs)
+    setOpenCondIds(prev => new Set([...prev, newCond.id]))
   }
   function moveCond(from, to) {
     const cs = [...pattern.conditions]
@@ -1247,10 +1249,16 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
                   <CondCard
                     cond={cond} idx={idx} total={pattern.conditions.length} color={condColor(idx)}
                     onChange={c => setCond(idx, c)}
-                    onRemove={() => delCond(idx)}
+                    onRemove={() => { delCond(idx); setOpenCondIds(prev => { const s = new Set(prev); s.delete(cond.id); return s }) }}
                     onCopy={() => copyCond(idx)}
                     onMoveUp={() => moveCond(idx, idx - 1)}
                     onMoveDown={() => moveCond(idx, idx + 1)}
+                    open={openCondIds.has(cond.id)}
+                    onToggleOpen={() => setOpenCondIds(prev => {
+                      const s = new Set(prev)
+                      s.has(cond.id) ? s.delete(cond.id) : s.add(cond.id)
+                      return s
+                    })}
                   />
                   {idx < pattern.conditions.length - 1 && (
                     <JoinBadge value={cond.joinNext || 'AND'} onChange={v => setJoin(idx, v)} />
@@ -1260,7 +1268,11 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
             </div>
 
             <button
-              onClick={() => s('conditions', [...pattern.conditions, blankCond()])}
+              onClick={() => {
+                const nc = blankCond()
+                s('conditions', [...pattern.conditions, nc])
+                setOpenCondIds(prev => new Set([...prev, nc.id]))
+              }}
               style={{
                 marginTop: 8, width: '100%', padding: '9px',
                 borderRadius: 8, cursor: 'pointer', fontSize: 12,
