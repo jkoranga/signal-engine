@@ -61,7 +61,6 @@ const RHS_MODES = [
   { id: 'mult',    label: '× Mult',      hint: 'Field × multiplier  e.g. EMA20[-2] × 1.5' },
   { id: 'pct',     label: '± %',         hint: 'Field ± percent  e.g. EMA20[-2] + 0.35%' },
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
-  { id: 'emaDist', label: 'EMA Range',   hint: 'True if left field is within min%…max% distance of right EMA  e.g. Close within −2% to +1% of EMA20' },
   { id: 'slope',   label: 'Slope %',     hint: '(field[0] / field[-N] − 1) × 100 — how much the field rose over N candles' },
 ]
 
@@ -167,10 +166,6 @@ export function condFormula(c) {
       return `${windowLabel} ${lhsF} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
     }
     if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
-    if (c.rhsMode === 'emaDist') {
-      const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
-      return `${windowLabel} ${lhsF} within ${mn}%…${mx}% of ${rhs}`
-    }
     if (c.rhsMode === 'slope') {
       const n = c.slopeLen ?? 5
       const thresh = c.slopeNum ?? 0
@@ -196,10 +191,6 @@ export function condFormula(c) {
     return `${lhs} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
   }
   if (c.rhsMode === 'pctdiff') return `(${lhs}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
-  if (c.rhsMode === 'emaDist') {
-    const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
-    return `${lhs} within ${mn}%…${mx}% of ${rhs}`
-  }
   if (c.rhsMode === 'slope') {
     const n = c.slopeLen ?? 5
     const thresh = c.slopeNum ?? 0
@@ -218,7 +209,6 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
-    emaDistMin: -2, emaDistMax: 1,   // for emaDist mode: % range around RHS field
     slopeLen: 5, slopeNum: 0,        // for slope mode: look-back candles + threshold %
     // Range check (applies condition to every candle in a window)
     rangeCheck: false,
@@ -289,14 +279,6 @@ export function compilePattern(pattern) {
           let rhsV
           if (cond.rhsMode === 'number') {
             rhsV = parseFloat(cond.rhsNum) || 0
-          } else if (cond.rhsMode === 'emaDist') {
-            const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
-            const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
-            const rhsBase   = getVal(rhsCandle, cond.rhsField || cond.lhsField, rhsAbsIdx)
-            if (rhsBase == null || rhsBase === 0) continue
-            const distPct = (lhsV / rhsBase - 1) * 100
-            results.push(distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1))
-            continue
           } else if (cond.rhsMode === 'slope') {
             const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
             const pastCandle = getC(off - n)
@@ -367,11 +349,6 @@ export function compilePattern(pattern) {
       else if (cond.rhsMode === 'field')   { if (rhsBase == null) return null; rhsV = rhsBase }
       else if (cond.rhsMode === 'mult')    { if (rhsBase == null) return null; rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1) }
       else if (cond.rhsMode === 'pct')     { if (rhsBase == null) return null; rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100) }
-      else if (cond.rhsMode === 'emaDist') {
-        if (rhsBase == null || rhsBase === 0) return null
-        const distPct = (lhsV / rhsBase - 1) * 100
-        return distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1)
-      }
       else if (cond.rhsMode === 'slope') {
         const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
         const pastAbsIdx = lhsAbsIdx - n
@@ -776,34 +753,6 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
               </div>
             )}
 
-            {cond.rhsMode === 'emaDist' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                <FSelect
-                  value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
-                  onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color} hideOffset={!!cond.rangeCheck}
-                />
-                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div>
-                    <Lbl>MIN %</Lbl>
-                    <NInput value={cond.emaDistMin ?? -2} onChange={v => s('emaDistMin', parseFloat(v))} step="0.1" suffix="%" w={72} />
-                  </div>
-                  <span style={{ fontSize:14, color:'var(--text3)', marginTop:14 }}>…</span>
-                  <div>
-                    <Lbl>MAX %</Lbl>
-                    <NInput value={cond.emaDistMax ?? 1} onChange={v => s('emaDistMax', parseFloat(v))} step="0.1" suffix="%" w={72} />
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: 9, fontFamily: 'var(--mono)', color: color,
-                  padding: '5px 8px', borderRadius: 6,
-                  background: `${color}10`, border: `1px solid ${color}25`,
-                }}>
-                  Left within [{cond.emaDistMin ?? -2}% … {cond.emaDistMax ?? 1}%] of {FIELD_MAP[cond.rhsField || 'ema20']?.short}
-                  &nbsp;·&nbsp; negative = below EMA, positive = above EMA
-                </div>
-              </div>
-            )}
 
             {cond.rhsMode === 'slope' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -816,13 +765,24 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div>
-                    <Lbl>LOOK-BACK CANDLES</Lbl>
-                    <NInput
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Lbl>LOOK-BACK CANDLES</Lbl>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, color,
+                        background: `${color}20`, border: `1px solid ${color}40`,
+                        borderRadius: 5, padding: '1px 7px', fontFamily: 'var(--mono)',
+                      }}>{cond.slopeLen ?? 5}</span>
+                    </div>
+                    <input
+                      type="range" min={1} max={20} step={1}
                       value={cond.slopeLen ?? 5}
-                      onChange={v => s('slopeLen', Math.max(1, parseInt(v) || 5))}
-                      step="1" w={70}
+                      onChange={e => s('slopeLen', parseInt(e.target.value))}
+                      style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
                     />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                      <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
+                    </div>
                   </div>
                   <div>
                     <Lbl>THRESHOLD %</Lbl>
@@ -1359,7 +1319,6 @@ export default function PatternBuilderTab({ settings, update }) {
         <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
         <b>% Diff</b>: how many % LHS is above/below RHS<br/>
         <b>Slope %</b>: how much field rose over N candles &nbsp;·&nbsp; bullish = op &gt; 0 &nbsp;·&nbsp; bearish = op &lt; 0<br/>
-        <b>EMA Range</b>: Close within −2%…+1% of EMA20 &nbsp;·&nbsp;
         <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
         <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
