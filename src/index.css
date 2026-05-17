@@ -12,6 +12,8 @@
   --amber:#ffa726; --amber-dim:rgba(255,167,38,.1);
   --accent:#00b8d9; --accent-dim:rgba(0,184,217,.1);
   --purple:#b388ff; --purple-dim:rgba(179,136,255,.1);
+  --lime:#c6ff00; --lime-dim:rgba(198,255,0,.10); --lime-border:rgba(198,255,0,.35);
+  --lime-glow-a:rgba(198,255,0,.67); --lime-glow-b:rgba(198,255,0,1); --lime-glow-c:rgba(198,255,0,.53);
 }
 
 /* ── LIGHT theme ── */
@@ -26,6 +28,8 @@
   --amber:#b06000; --amber-dim:rgba(176,96,0,.1);
   --accent:#0077a0; --accent-dim:rgba(0,119,160,.1);
   --purple:#7c4dcc; --purple-dim:rgba(124,77,204,.1);
+  --lime:#4a7c00; --lime-dim:rgba(74,124,0,.10); --lime-border:rgba(74,124,0,.35);
+  --lime-glow-a:rgba(74,124,0,.5); --lime-glow-b:rgba(74,124,0,.85); --lime-glow-c:rgba(74,124,0,.3);
 }
 
 /* ── Shared constants (never change between themes) ── */
@@ -373,8 +377,8 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 
 /* Builder tab — glowing P */
 @keyframes pb-tab-glow {
-  0%, 100% { text-shadow: 0 0 4px #c6ff00aa, 0 0 8px #c6ff0055; }
-  50%       { text-shadow: 0 0 10px #c6ff00ff, 0 0 22px #c6ff0088, 0 0 40px #c6ff0033; }
+  0%, 100% { text-shadow: 0 0 4px var(--lime-glow-a), 0 0 8px var(--lime-dim); }
+  50%       { text-shadow: 0 0 10px var(--lime-glow-b), 0 0 22px var(--lime-glow-a), 0 0 40px var(--lime-glow-c); }
 }
 .bottom-tab-builder-active span {
   animation: pb-tab-glow 1.8s ease-in-out infinite;

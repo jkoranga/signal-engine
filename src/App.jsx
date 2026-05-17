@@ -16,7 +16,7 @@ export const TF_TABS = [
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
-  { id: 'builder',  label: '🔧', color: '#c6ff00', glow: 'rgba(198,255,0,0.3)', isBuilder: true },
+  { id: 'builder',  label: '🔧', color: 'var(--lime)', glow: 'var(--lime-dim)', isBuilder: true },
   { id: 'settings', label: 'settings', color: '#00b8d9', glow: 'rgba(0,184,217,0.3)', isSettings: true },
 ]
 
@@ -526,9 +526,9 @@ function PatternsModal({ open, onClose, settings, update }) {
             return (
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
-                  <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: '#c6ff00', opacity: .8 }}>MY PATTERNS</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+                  <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
+                  <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: 'var(--lime)', opacity: .8 }}>MY PATTERNS</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -798,16 +798,16 @@ export default function App() {
             title="Patterns"
             style={{
               height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
-              border: activeTab==='builder' ? '1.5px solid rgba(198,255,0,0.7)' : '1.5px solid rgba(198,255,0,0.35)',
-              background: activeTab==='builder' ? 'rgba(198,255,0,0.13)' : 'rgba(198,255,0,0.07)',
+              border: activeTab==='builder' ? '1.5px solid var(--lime-border)' : '1.5px solid var(--lime-border)',
+              background: activeTab==='builder' ? 'var(--lime-dim)' : 'var(--lime-dim)',
               display:'flex', alignItems:'center', gap:5,
               cursor:'pointer', transition:'all .15s',
-              color: activeTab==='builder' ? '#c6ff00' : 'rgba(198,255,0,0.7)',
+              color: activeTab==='builder' ? 'var(--lime)' : 'var(--lime-border)',
             }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(198,255,0,0.7)';e.currentTarget.style.color='#c6ff00'}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--lime-border)';e.currentTarget.style.color='var(--lime)'}}
             onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='builder'?'rgba(198,255,0,0.7)':'rgba(198,255,0,0.35)'
-              e.currentTarget.style.color=activeTab==='builder'?'#c6ff00':'rgba(198,255,0,0.7)'
+              e.currentTarget.style.borderColor=activeTab==='builder'?'var(--lime-border)':'var(--lime-border)'
+              e.currentTarget.style.color=activeTab==='builder'?'var(--lime)':'var(--lime-border)'
             }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -918,7 +918,7 @@ export default function App() {
                 <span style={{
                   fontFamily: 'Georgia, "Times New Roman", serif',
                   fontSize: 20, fontWeight: 900, lineHeight: 1,
-                  color: isActive ? '#c6ff00' : 'currentColor',
+                  color: isActive ? 'var(--lime)' : 'currentColor',
                   letterSpacing: '-1px',
                   display: 'block',
                 }}>P</span>
