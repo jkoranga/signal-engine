@@ -1,6 +1,23 @@
 // ─── Pattern Builder v2 ───────────────────────────────────────────────────────
 import React, { useState, useMemo } from 'react'
 
+// Inject icon picker animations once
+if (typeof document !== 'undefined' && !document.getElementById('pb-icon-styles')) {
+  const st = document.createElement('style')
+  st.id = 'pb-icon-styles'
+  st.textContent = `
+    @keyframes pb-bounce { 0%,100%{transform:translateY(0) scale(1)} 35%{transform:translateY(-7px) scale(1.25)} 65%{transform:translateY(-2px) scale(1.07)} }
+    @keyframes pb-pop    { 0%{transform:scale(0.5) rotate(-12deg);opacity:0} 60%{transform:scale(1.18) rotate(4deg)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+    @keyframes pb-glow   { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5) drop-shadow(0 0 6px currentColor)} }
+    .pb-icon-btn { transition: transform .13s cubic-bezier(.34,1.56,.64,1), box-shadow .13s, background .13s !important; cursor:pointer; }
+    .pb-icon-btn:hover  { transform: scale(1.28) !important; z-index:2; }
+    .pb-icon-btn:active { transform: scale(0.92) !important; }
+    .pb-icon-sel { animation: pb-bounce .5s cubic-bezier(.34,1.56,.64,1); }
+    .pb-icon-new { animation: pb-pop .35s cubic-bezier(.34,1.56,.64,1); }
+  `
+  document.head.appendChild(st)
+}
+
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [
   { id: 'close',     label: 'Close',      short: 'Close',  group: 'Price' },
@@ -38,12 +55,25 @@ const RHS_MODES = [
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
 ]
 
+// Range-check modes — condition applied to every candle in a window
+const RANGE_MODES = [
+  { id: 'all', label: 'ALL candles pass' },
+  { id: 'any', label: 'ANY candle passes' },
+]
+
 const OFFSETS = Array.from({ length: 11 }, (_, i) =>
   i === 0 ? { v: 0, label: '[0] Current' } : { v: -i, label: `[-${i}] Prev ${i}` }
 )
 
 const TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
-const ICONS   = ['⭐','💹','📈','📉','🚀','💣','🎯','⚡','🔥','💎','🌊','🧲','🔔','🏹']
+const ICON_CATEGORIES = [
+  { label: '📈 Markets',  icons: ['📈','📉','💹','📊','💰','💵','💴','💸','🏦','💳','🪙','💲'] },
+  { label: '🚀 Signals',  icons: ['🚀','⚡','🔥','💎','🎯','🏹','🧲','🔔','⭐','🌟','✨','💫'] },
+  { label: '🌊 Nature',   icons: ['🌊','🌪','⛈','🌙','🌞','🌈','❄️','🌋','🌀','🦁','🐂','🐻'] },
+  { label: '⚔️ Power',    icons: ['⚔️','🛡','🗡','💣','🔱','👑','🏆','🎖','🥇','⚠️','☠️','🔴'] },
+  { label: '🔧 Tools',    icons: ['🔧','🔩','⚙️','🔬','🧪','🧬','📡','🖥','💻','📱','🔭','🛰'] },
+  { label: '🎰 Fun',      icons: ['🎰','🎲','🎯','🃏','🎪','🎭','🎬','🎵','🎸','🥂','🍀','🦋'] },
+]
 
 const G = 'var(--green)'
 const R = 'var(--red)'
@@ -68,12 +98,27 @@ function condColor(idx) { return COND_COLORS[idx % COND_COLORS.length] }
 
 // Mirror an operator (flip comparison direction)
 const MIRROR_OP = { '>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '≠': '≠' }
+
+// Flip High ↔ Low for bearish/bullish mirror (other fields stay same)
+const MIRROR_FIELD = { 'high': 'low', 'low': 'high' }
+
 function mirrorCond(cond) {
+  // Invert multiplier: × 1.005 → × (1/1.005) = × 0.995
+  const rhsMult = cond.rhsMult != null
+    ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
+    : cond.rhsMult
+
+  // Invert pct: +0.5% → -0.5%
+  const rhsPct = cond.rhsPct != null ? -parseFloat(cond.rhsPct) : cond.rhsPct
+
   return {
     ...cond,
     id: uid(),
     op: MIRROR_OP[cond.op] ?? cond.op,
-    label: cond.label ? `Mirror of ${cond.label}` : 'Mirrored condition',
+    lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
+    rhsMult,
+    rhsPct,
+    label: cond.label ? `Mirror of ${cond.label}` : '',
   }
 }
 
@@ -82,9 +127,29 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ── Formula label ─────────────────────────────────────────────────────────────
 export function condFormula(c) {
   const lhsF = FIELD_MAP[c.lhsField]?.short || c.lhsField
+  const op   = c.op
+
+  // Range mode: prefix with "ALL/ANY [from..to]"
+  if (c.rangeCheck) {
+    const from = c.rangeFrom ?? -1
+    const to   = c.rangeTo   ?? -5
+    const modeLabel = c.rangeMode === 'any' ? 'ANY' : 'ALL'
+    const windowLabel = `${modeLabel}[${from}→${to}]`
+    const rhsF = FIELD_MAP[c.rhsField]?.short || (c.rhsField || '?')
+    if (c.rhsMode === 'number')  return `${windowLabel} ${lhsF} ${op} ${c.rhsNum ?? 0}`
+    const rhs = rhsF
+    if (c.rhsMode === 'field')   return `${windowLabel} ${lhsF} ${op} ${rhs}`
+    if (c.rhsMode === 'mult')    return `${windowLabel} ${lhsF} ${op} ${rhs} × ${c.rhsMult ?? 1}`
+    if (c.rhsMode === 'pct') {
+      const s = (c.rhsPct ?? 0) >= 0 ? '+' : ''
+      return `${windowLabel} ${lhsF} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
+    }
+    if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+    return `${windowLabel} ${lhsF} ${op} ?`
+  }
+
   const lhsO = c.lhsOffset === 0 ? '' : `[${c.lhsOffset}]`
   const lhs  = `${lhsF}${lhsO}`
-  const op   = c.op
 
   if (c.rhsMode === 'number')  return `${lhs} ${op} ${c.rhsNum ?? 0}`
 
@@ -111,6 +176,11 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
+    // Range check (applies condition to every candle in a window)
+    rangeCheck: false,
+    rangeFrom: -1,   // start offset (most recent), e.g. -1
+    rangeTo: -5,     // end offset (oldest), e.g. -5
+    rangeMode: 'all', // 'all' | 'any'
   }
 }
 
@@ -147,6 +217,63 @@ export function compilePattern(pattern) {
     if (!active.length) return null
 
     function evalCond(cond) {
+      // ── Range check: apply condition to every candle in [rangeFrom..rangeTo] ──
+      if (cond.rangeCheck) {
+        const from = Math.min(cond.rangeFrom ?? -1, 0)   // e.g. -1 (most recent)
+        const to   = Math.min(cond.rangeTo   ?? -5, 0)   // e.g. -5 (oldest)
+        const start = Math.min(from, to)
+        const end   = Math.max(from, to)
+        const results = []
+        for (let off = start; off <= end; off++) {
+          // Evaluate lhs at this offset, rhs at same offset (field-relative) or fixed
+          const lhsCandle = getC(off)
+          if (!lhsCandle) continue
+          const lhsV = getVal(lhsCandle, cond.lhsField)
+          if (lhsV == null) continue
+
+          let rhsV
+          if (cond.rhsMode === 'number') {
+            rhsV = parseFloat(cond.rhsNum) || 0
+          } else {
+            // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
+            const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
+            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField)
+            if (rhsBase == null) continue
+            if (cond.rhsMode === 'field')   rhsV = rhsBase
+            else if (cond.rhsMode === 'mult')  rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1)
+            else if (cond.rhsMode === 'pct')   rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100)
+            else if (cond.rhsMode === 'pctdiff') {
+              if (rhsBase === 0) continue
+              const diff = (lhsV / rhsBase - 1) * 100
+              const num  = parseFloat(cond.rhsNum) || 0
+              const op   = OP_SYM[cond.op] || cond.op
+              let r
+              if (op === '>')  r = diff >  num
+              else if (op === '>=') r = diff >= num
+              else if (op === '<')  r = diff <  num
+              else if (op === '<=') r = diff <= num
+              else if (op === '==') r = Math.abs(diff - num) < 1e-9
+              else r = Math.abs(diff - num) >= 1e-9
+              results.push(r)
+              continue
+            } else { rhsV = rhsBase }
+          }
+
+          const op = OP_SYM[cond.op] || cond.op
+          let r
+          if (op === '>')  r = lhsV >  rhsV
+          else if (op === '>=') r = lhsV >= rhsV
+          else if (op === '<')  r = lhsV <  rhsV
+          else if (op === '<=') r = lhsV <= rhsV
+          else if (op === '==') r = Math.abs(lhsV - rhsV) < 1e-9
+          else r = Math.abs(lhsV - rhsV) >= 1e-9
+          results.push(r)
+        }
+        if (!results.length) return null
+        return cond.rangeMode === 'any' ? results.some(Boolean) : results.every(Boolean)
+      }
+
+      // ── Standard single-candle check ──
       const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField)
       if (lhsV == null) return null
 
@@ -229,7 +356,7 @@ function Lbl({ children }) {
   return <div style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', marginBottom: 5 }}>{children}</div>
 }
 
-function FSelect({ value, offset, onField, onOffset, color }) {
+function FSelect({ value, offset, onField, onOffset, color, hideOffset }) {
   return (
     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
       <select value={value} onChange={e => onField(e.target.value)} style={{
@@ -243,13 +370,15 @@ function FSelect({ value, offset, onField, onOffset, color }) {
           </optgroup>
         ))}
       </select>
-      <select value={offset ?? 0} onChange={e => onOffset(parseInt(e.target.value))} style={{
-        background: 'var(--bg3)', border: '1.5px solid var(--border)',
-        color: 'var(--text2)', borderRadius: 8, padding: '6px 8px',
-        fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
-      }}>
-        {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-      </select>
+      {!hideOffset && (
+        <select value={offset ?? 0} onChange={e => onOffset(parseInt(e.target.value))} style={{
+          background: 'var(--bg3)', border: '1.5px solid var(--border)',
+          color: 'var(--text2)', borderRadius: 8, padding: '6px 8px',
+          fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
+        }}>
+          {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      )}
     </div>
   )
 }
@@ -299,7 +428,7 @@ function JoinBadge({ value, onChange }) {
 }
 
 // ── Condition card ────────────────────────────────────────────────────────────
-function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirror, onMoveUp, onMoveDown }) {
+function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown }) {
   const [open, setOpen] = useState(true)
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
@@ -333,7 +462,6 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           cursor: 'pointer',
         }}>
-          {cond.label ? <span style={{ color: color, opacity: .85 }}>[{cond.label}] </span> : null}
           {formula}
         </div>
 
@@ -342,7 +470,6 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
           {idx > 0        && <IBtn onClick={onMoveUp}   title="Move up">↑</IBtn>}
           {idx < total-1  && <IBtn onClick={onMoveDown} title="Move down">↓</IBtn>}
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
-          <IBtn onClick={onMirror} title="Add mirrored condition (flipped operator)" col="#f06292">⇄</IBtn>
           <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
         </div>
         <span onClick={() => setOpen(o => !o)} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
@@ -352,31 +479,115 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
 
       {/* Body */}
       {open && (
-        <div style={{ padding: '10px 11px 12px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+        <div style={{ padding: '8px 9px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
 
-          {/* LABEL / ALERT NAME */}
-          <div style={{ padding: '8px 10px', borderRadius: 8, background: `${color}12`, border: `1px solid ${color}30` }}>
-            <Lbl>CONDITION LABEL / ALERT NAME</Lbl>
-            <input
-              value={cond.label || ''}
-              onChange={e => s('label', e.target.value)}
-              placeholder="e.g. EMA crossover (shows in alert)"
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: 'var(--bg3)', border: `1.5px solid ${color}40`,
-                color: 'var(--text)', borderRadius: 7, padding: '6px 9px',
-                fontSize: 12, fontFamily: 'var(--mono)',
-              }}
-            />
+          {/* RANGE CHECK TOGGLE */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '7px 10px', borderRadius: 8,
+            background: cond.rangeCheck ? `${color}14` : 'rgba(0,0,0,0.12)',
+            border: `1px solid ${cond.rangeCheck ? color + '40' : 'var(--border)'}`,
+            transition: 'all .15s',
+          }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: cond.rangeCheck ? color : 'var(--text2)' }}>
+                Multi-Candle Range
+              </div>
+              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 1 }}>
+                {cond.rangeCheck
+                  ? `Check ${Math.abs((cond.rangeTo ?? -5) - (cond.rangeFrom ?? -1)) + 1} candles [${cond.rangeFrom ?? -1} → ${cond.rangeTo ?? -5}]`
+                  : 'Apply condition across a window of candles'}
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div onClick={() => s('rangeCheck', !cond.rangeCheck)} style={{
+              width: 38, height: 22, borderRadius: 11, cursor: 'pointer', flexShrink: 0,
+              background: cond.rangeCheck ? color : 'var(--bg3)',
+              border: `1.5px solid ${cond.rangeCheck ? color : 'var(--border)'}`,
+              position: 'relative', transition: 'all .2s',
+            }}>
+              <div style={{
+                position: 'absolute', top: 2,
+                left: cond.rangeCheck ? 18 : 2,
+                width: 14, height: 14, borderRadius: '50%',
+                background: '#fff', transition: 'left .2s',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+              }} />
+            </div>
           </div>
 
-          {/* LEFT SIDE */}
-          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+          {/* RANGE WINDOW CONTROLS (shown when range is on) */}
+          {cond.rangeCheck && (
+            <div style={{
+              padding: '10px 10px', borderRadius: 8,
+              background: `${color}0a`, border: `1px solid ${color}30`,
+              display: 'flex', flexDirection: 'column', gap: 9,
+            }}>
+              {/* From / To row */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <Lbl>FROM (newest)</Lbl>
+                  <select value={cond.rangeFrom ?? -1} onChange={e => s('rangeFrom', parseInt(e.target.value))} style={{
+                    width: '100%', background: 'var(--bg3)', border: `1.5px solid ${color}40`,
+                    color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 11,
+                    fontFamily: 'var(--mono)',
+                  }}>
+                    {Array.from({ length: 21 }, (_, i) => -i).map(v => (
+                      <option key={v} value={v}>[{v}] {v === 0 ? 'Current' : `Prev ${Math.abs(v)}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Lbl>TO (oldest)</Lbl>
+                  <select value={cond.rangeTo ?? -5} onChange={e => s('rangeTo', parseInt(e.target.value))} style={{
+                    width: '100%', background: 'var(--bg3)', border: `1.5px solid ${color}40`,
+                    color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontSize: 11,
+                    fontFamily: 'var(--mono)',
+                  }}>
+                    {Array.from({ length: 21 }, (_, i) => -i).map(v => (
+                      <option key={v} value={v}>[{v}] {v === 0 ? 'Current' : `Prev ${Math.abs(v)}`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* ALL / ANY */}
+              <div>
+                <Lbl>MATCH</Lbl>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {RANGE_MODES.map(m => (
+                    <button key={m.id} onClick={() => s('rangeMode', m.id)} style={{
+                      flex: 1, padding: '6px 8px', borderRadius: 7, cursor: 'pointer',
+                      fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
+                      border: `1.5px solid ${cond.rangeMode === m.id ? color : 'var(--border)'}`,
+                      background: cond.rangeMode === m.id ? `${color}20` : 'var(--bg3)',
+                      color: cond.rangeMode === m.id ? color : 'var(--text3)',
+                      transition: 'all .15s',
+                    }}>{m.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary pill */}
+              <div style={{
+                fontSize: 10, fontFamily: 'var(--mono)', color: color,
+                padding: '4px 9px', borderRadius: 6,
+                background: `${color}10`, border: `1px solid ${color}25`,
+              }}>
+                {cond.rangeMode === 'any' ? 'ANY' : 'ALL'} candles
+                from [{cond.rangeFrom ?? -1}] to [{cond.rangeTo ?? -5}]
+                ({Math.abs((cond.rangeTo ?? -5) - (cond.rangeFrom ?? -1)) + 1} candles) must pass
+              </div>
+            </div>
+          )}
+
+          {/* LEFT SIDE — show candle offset only when range is OFF */}
+          <div style={{ padding: '7px 8px', borderRadius: 7, background: 'rgba(0,0,0,0.18)' }}>
             <Lbl>LEFT — candle field</Lbl>
             <FSelect
-              value={cond.lhsField} offset={cond.lhsOffset}
-              onField={v => s('lhsField', v)} onOffset={v => s('lhsOffset', v)}
-              color={color}
+              value={cond.lhsField} offset={cond.rangeCheck ? 0 : cond.lhsOffset}
+              onField={v => s('lhsField', v)} onOffset={cond.rangeCheck ? null : v => s('lhsOffset', v)}
+              color={color} hideOffset={!!cond.rangeCheck}
             />
           </div>
 
@@ -391,7 +602,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
           </div>
 
           {/* RIGHT SIDE — mode select */}
-          <div style={{ padding: '9px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.18)' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 7, background: 'rgba(0,0,0,0.18)' }}>
             <Lbl>RIGHT — compare to</Lbl>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 9 }}>
               {RHS_MODES.map(m => (
@@ -414,7 +625,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
               <FSelect
                 value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                 onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                color={color}
+                color={color} hideOffset={!!cond.rangeCheck}
               />
             )}
 
@@ -423,7 +634,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span style={{ fontFamily:'var(--mono)', color:'var(--text3)', fontSize:13 }}>×</span>
@@ -438,7 +649,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <NInput value={cond.rhsPct ?? 0} onChange={v => s('rhsPct', v)} step="0.01" suffix="%" />
               </div>
@@ -449,7 +660,7 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
                 <FSelect
                   value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
                   onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
-                  color={color}
+                  color={color} hideOffset={!!cond.rangeCheck}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)' }}>{cond.op}</span>
@@ -476,10 +687,158 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMirro
   )
 }
 
+// ── Icon Picker ───────────────────────────────────────────────────────────────
+function IconPicker({ value, onChange, color }) {
+  const [open, setOpen]   = useState(false)
+  const [cat, setCat]     = useState(0)
+  const [prevVal, setPrev] = useState(value)
+
+  function pick(ic) {
+    setPrev(value)
+    onChange(ic)
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Trigger button — current icon */}
+      <button
+        className={`pb-icon-btn${value !== prevVal ? ' pb-icon-sel' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: 54, height: 54, borderRadius: 14, fontSize: 26,
+          border: `2px solid ${open ? color : color + '60'}`,
+          background: open ? `${color}22` : `${color}0e`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: open ? `0 0 18px ${color}55` : `0 0 8px ${color}22`,
+          position: 'relative', overflow: 'visible',
+        }}
+      >
+        <span style={{ lineHeight: 1 }}>{value}</span>
+        {/* small edit badge */}
+        <span style={{
+          position: 'absolute', bottom: -4, right: -4,
+          width: 16, height: 16, borderRadius: '50%',
+          background: color, fontSize: 8, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 900,
+        }}>✎</span>
+      </button>
+
+      {/* Dropdown picker */}
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+          <div style={{
+            position: 'absolute', top: 62, left: 0, zIndex: 201,
+            width: 300, borderRadius: 16,
+            background: 'var(--bg1)',
+            border: `1.5px solid ${color}55`,
+            boxShadow: `0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px ${color}22`,
+            overflow: 'hidden',
+            animation: 'pb-pop .25s cubic-bezier(.34,1.56,.64,1)',
+          }}>
+            {/* Category tabs */}
+            <div style={{
+              display: 'flex', overflowX: 'auto', gap: 2, padding: '8px 8px 0',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              scrollbarWidth: 'none',
+            }}>
+              {ICON_CATEGORIES.map((c, i) => (
+                <button key={i} onClick={() => setCat(i)} style={{
+                  flexShrink: 0, padding: '5px 9px', borderRadius: '8px 8px 0 0',
+                  fontSize: 10, fontFamily: 'var(--mono)', fontWeight: cat === i ? 800 : 500,
+                  border: 'none', cursor: 'pointer',
+                  background: cat === i ? `${color}28` : 'transparent',
+                  color: cat === i ? color : 'var(--text3)',
+                  borderBottom: cat === i ? `2px solid ${color}` : '2px solid transparent',
+                  transition: 'all .15s',
+                }}>{c.label}</button>
+              ))}
+            </div>
+
+            {/* Icon grid */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)',
+              gap: 6, padding: 12,
+            }}>
+              {ICON_CATEGORIES[cat].icons.map(ic => {
+                const sel = value === ic
+                return (
+                  <button
+                    key={ic}
+                    className={`pb-icon-btn${sel ? ' pb-icon-sel' : ''}`}
+                    onClick={() => pick(ic)}
+                    style={{
+                      width: '100%', aspectRatio: '1', borderRadius: 10, fontSize: 22,
+                      border: `1.5px solid ${sel ? color : 'rgba(255,255,255,0.07)'}`,
+                      background: sel ? `${color}30` : 'rgba(255,255,255,0.03)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: sel ? `0 0 12px ${color}60, inset 0 0 8px ${color}18` : 'none',
+                    }}
+                  >{ic}</button>
+                )
+              })}
+            </div>
+
+            {/* Footer hint */}
+            <div style={{
+              padding: '6px 12px 10px',
+              fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)',
+              borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center',
+            }}>
+              Tap an icon to select · current: {value}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen, allPatternNames }) {
   const [open, setOpen] = useState(!!defaultOpen)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [mirrorPopup, setMirrorPopup] = useState(false)
+  const [mirrorName, setMirrorName] = useState('')
+  const [mirrorNameAlert, setMirrorNameAlert] = useState('')
+  const mirrorInputRef = React.useRef(null)
   const color = pattern.side === 'bull' ? G : R
+  const nameRef = React.useRef(null)
+
+  React.useEffect(() => {
+    if (defaultOpen && nameRef.current) {
+      const t = setTimeout(() => {
+        nameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        nameRef.current?.focus()
+        nameRef.current?.select()
+      }, 120)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (mirrorPopup) {
+      setMirrorName(pattern.name)
+      setTimeout(() => { mirrorInputRef.current?.focus(); mirrorInputRef.current?.select() }, 60)
+    }
+  }, [mirrorPopup])
+
+  function handleMirrorSave() {
+    const name = mirrorName.trim()
+    if (!name) {
+      setMirrorNameAlert('Please enter a name.')
+      return
+    }
+    if ((allPatternNames || []).some(n => n.toLowerCase() === name.toLowerCase())) {
+      setMirrorNameAlert('A pattern with this name already exists.')
+      return
+    }
+    onMirrorPattern(name)
+    setMirrorPopup(false)
+  }
+
+  const mirroredSide = pattern.side === 'bull' ? 'bear' : 'bull'
 
   function s(k, v) { onChange({ ...pattern, [k]: v }) }
   function setCond(i, c) { const cs = [...pattern.conditions]; cs[i] = c; s('conditions', cs) }
@@ -487,11 +846,6 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
   function copyCond(i)   {
     const cs = [...pattern.conditions]
     cs.splice(i + 1, 0, { ...cs[i], id: uid() })
-    s('conditions', cs)
-  }
-  function mirrorCondAt(i) {
-    const cs = [...pattern.conditions]
-    cs.splice(i + 1, 0, mirrorCond(cs[i]))
     s('conditions', cs)
   }
   function moveCond(from, to) {
@@ -505,10 +859,84 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
   const active = pattern.conditions.filter(c => c.enabled).length
 
   return (
+    <div style={{ position: 'relative' }}>
+
+      {/* ── Mirror rename popup ── */}
+      {mirrorPopup && (
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setMirrorPopup(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,0.45)',
+          }} />
+          {/* Card */}
+          <div style={{
+            position: 'absolute', top: 6, left: 0, right: 0, zIndex: 100,
+            borderRadius: 13, padding: '18px 16px',
+            background: 'var(--bg1)',
+            border: `1.5px solid ${BLU}70`,
+            boxShadow: `0 10px 40px rgba(0,0,0,0.65), 0 0 0 1px ${BLU}18`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 18 }}>⇄</span>
+              <div style={{ fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 14, color: BLU }}>
+                Mirror Pattern
+              </div>
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+              Creates a new {mirroredSide === 'bull' ? '🟢 Bull' : '🔴 Bear'} pattern with all operators flipped.
+              Give it a name before saving.
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', fontWeight: 700,
+              letterSpacing: '.07em', marginBottom: 6 }}>NAME</div>
+            <input
+              ref={mirrorInputRef}
+              value={mirrorName}
+              onChange={e => { setMirrorName(e.target.value); setMirrorNameAlert('') }}
+              onKeyDown={e => { if (e.key === 'Enter') handleMirrorSave(); if (e.key === 'Escape') setMirrorPopup(false) }}
+              placeholder="Enter a new name…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--bg3)',
+                border: `1.5px solid ${mirrorNameAlert ? 'var(--red)' : BLU + '80'}`,
+                color: 'var(--text)', borderRadius: 8, padding: '10px 12px',
+                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                boxShadow: mirrorNameAlert ? '0 0 0 3px rgba(255,60,60,0.18)' : `0 0 0 3px ${BLU}18`,
+                outline: 'none', marginBottom: mirrorNameAlert ? 6 : 13,
+                transition: 'border .2s, box-shadow .2s',
+              }}
+            />
+            {mirrorNameAlert && (
+              <div style={{
+                fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)',
+                marginBottom: 10, padding: '5px 8px', borderRadius: 6,
+                background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.25)',
+              }}>
+                ⚠ {mirrorNameAlert}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleMirrorSave} style={{
+                flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                border: `1.5px solid ${BLU}70`, background: `${BLU}25`, color: BLU,
+              }}>✓ Save &amp; Add Pattern</button>
+              <button onClick={() => setMirrorPopup(false)} style={{
+                padding: '10px 15px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text3)',
+              }}>Cancel</button>
+            </div>
+          </div>
+        </>
+      )}
+
     <div style={{
       borderRadius: 13,
       border: `1.5px solid ${pattern.enabled ? color + '55' : 'var(--border)'}`,
       background: 'var(--bg1)', overflow: 'hidden',
+      opacity: mirrorPopup ? 0.3 : 1,
+      transition: 'opacity .15s',
+      pointerEvents: mirrorPopup ? 'none' : 'auto',
     }}>
       {/* Header */}
       <div
@@ -540,12 +968,38 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
               width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
-          <button onClick={onDelete} style={{
+          <button onClick={() => setMirrorPopup(true)} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
             width: 28, height: 28, borderRadius: 7,
-            border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
-            color: 'var(--red)', cursor: 'pointer', fontSize: 16,
+            border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
+            color: BLU, cursor: 'pointer', fontSize: 15,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>🗑</button>
+            fontWeight: 700,
+          }}>⇄</button>
+
+          {confirmDelete ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)', whiteSpace: 'nowrap' }}>Delete?</span>
+              <button onClick={onDelete} style={{
+                padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)',
+                color: 'var(--red)',
+              }}>Yes</button>
+              <button onClick={() => setConfirmDelete(false)} style={{
+                padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                border: '1px solid var(--border)', background: 'var(--bg3)',
+                color: 'var(--text2)',
+              }}>No</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} style={{
+              width: 28, height: 28, borderRadius: 7,
+              border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
+              color: 'var(--red)', cursor: 'pointer', fontSize: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>🗑</button>
+          )}
         </div>
         <span style={{ color: 'var(--text3)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -555,26 +1009,20 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
         <div style={{ borderTop: '1px solid var(--border)', padding: '13px', display: 'flex', flexDirection: 'column', gap: 13 }}>
 
           {/* Name + icon */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <Lbl>ICON</Lbl>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {ICONS.map(ic => (
-                  <button key={ic} onClick={() => s('icon', ic)} style={{
-                    width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16,
-                    border: `1.5px solid ${pattern.icon === ic ? color : 'var(--border)'}`,
-                    background: pattern.icon === ic ? `${color}22` : 'var(--bg2)',
-                  }}>{ic}</button>
-                ))}
-              </div>
+              <IconPicker value={pattern.icon} onChange={v => s('icon', v)} color={color} />
             </div>
             <div style={{ flex: 1, minWidth: 140 }}>
               <Lbl>NAME</Lbl>
-              <input value={pattern.name} onChange={e => s('name', e.target.value)} style={{
+              <input ref={nameRef} value={pattern.name} onChange={e => s('name', e.target.value)} style={{
                 width: '100%', boxSizing: 'border-box',
-                background: 'var(--bg3)', border: '1.5px solid var(--border2)',
+                background: 'var(--bg3)', border: `1.5px solid ${defaultOpen ? BLU + 'cc' : 'var(--border2)'}`,
                 color: 'var(--text)', borderRadius: 8, padding: '8px 10px',
                 fontSize: 13, fontWeight: 700,
+                boxShadow: defaultOpen ? `0 0 0 2px ${BLU}33` : 'none',
+                transition: 'border .3s, box-shadow .3s',
               }} />
             </div>
           </div>
@@ -621,7 +1069,6 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
                     onChange={c => setCond(idx, c)}
                     onRemove={() => delCond(idx)}
                     onCopy={() => copyCond(idx)}
-                    onMirror={() => mirrorCondAt(idx)}
                     onMoveUp={() => moveCond(idx, idx - 1)}
                     onMoveDown={() => moveCond(idx, idx + 1)}
                   />
@@ -646,18 +1093,60 @@ function PatternEditor({ pattern, onChange, onDelete, defaultOpen }) {
         </div>
       )}
     </div>
+    </div>
   )
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
 export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
+  const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
+  const [trashOpen, setTrashOpen] = useState(false)
 
-  function save(ps) { update({ customPatterns: ps }) }
-  function add()     { const p = blankPattern(); setNewId(p.id); save([...patterns, p]) }
-  function upd(i, p) { const ps = [...patterns]; ps[i] = p; save(ps) }
-  function del(i)    { save(patterns.filter((_, j) => j !== i)) }
+  function savePatterns(ps) { update({ customPatterns: ps }) }
+  function saveTrash(ts)    { update({ deletedPatterns: ts }) }
+
+  function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
+  function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
+
+  function del(i) {
+    const removed = { ...patterns[i], deletedAt: Date.now() }
+    const newTrash = [removed, ...trash].slice(0, 50)
+    savePatterns(patterns.filter((_, j) => j !== i))
+    saveTrash(newTrash)
+  }
+
+  function restore(i) {
+    const p = { ...trash[i], deletedAt: undefined }
+    setNewId(p.id)
+    savePatterns([...patterns, p])
+    saveTrash(trash.filter((_, j) => j !== i))
+  }
+
+  function purgeOne(i) {
+    saveTrash(trash.filter((_, j) => j !== i))
+  }
+
+  function purgeAll() {
+    saveTrash([])
+  }
+
+  function mirrorPattern(i, customName) {
+    const src = patterns[i]
+    const mirrored = {
+      ...src,
+      id: `custom_${uid()}`,
+      name: customName,
+      side: src.side === 'bull' ? 'bear' : 'bull',
+      conditions: src.conditions.map(c => mirrorCond(c)),
+      createdAt: Date.now(),
+    }
+    const ps = [...patterns]
+    ps.splice(i + 1, 0, mirrored)
+    setNewId(null)   // don't auto-open — stay at pattern list home
+    savePatterns(ps)
+  }
 
   const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
   const bear = patterns.filter(p => p.side === 'bear' && p.enabled).length
@@ -693,34 +1182,151 @@ export default function PatternBuilderTab({ settings, update }) {
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
       </div>
 
-      {/* List */}
+      {/* List — "My Patterns" section */}
       {patterns.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>🔬</div>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c6ff00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: .4, marginBottom: 10 }}>
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
           <div style={{ fontSize: 13 }}>No custom patterns yet</div>
-          <div style={{ fontSize: 10, marginTop: 5, opacity: .7 }}>Tap + New Pattern to start</div>
+          <div style={{ fontSize: 10, marginTop: 5, opacity: .6 }}>Tap New Pattern to build one</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
-          {patterns.map((p, i) => (
-            <PatternEditor
-              key={p.id} pattern={p} defaultOpen={p.id === newId}
-              onChange={np => upd(i, np)} onDelete={() => del(i)}
-            />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+            <span style={{ fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800, letterSpacing: '.1em', color: '#c6ff00', opacity: .8 }}>
+              MY PATTERNS
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(198,255,0,0.15)' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
+            {patterns.map((p, i) => (
+              <PatternEditor
+                key={p.id} pattern={p} defaultOpen={p.id === newId}
+                onChange={np => upd(i, np)} onDelete={() => del(i)}
+                onMirrorPattern={(name) => mirrorPattern(i, name)}
+                allPatternNames={patterns.map(x => x.name)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Add button */}
       <button onClick={add} style={{
-        width: '100%', padding: '13px', borderRadius: 10, cursor: 'pointer',
+        width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
         fontSize: 13, fontFamily: 'var(--mono)', fontWeight: 800,
-        border: '2px dashed rgba(179,136,255,0.4)',
-        background: 'rgba(179,136,255,0.06)', color: A,
+        border: '2px dashed rgba(198,255,0,0.35)',
+        background: 'rgba(198,255,0,0.05)', color: '#c6ff00',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(179,136,255,0.13)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(179,136,255,0.06)'}
-      >+ New Pattern</button>
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(198,255,0,0.1)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(198,255,0,0.05)'}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        New Pattern
+      </button>
+
+      {/* ── Trash Bin ── */}
+      <div style={{ marginTop: 22 }}>
+        {/* Trash header toggle */}
+        <button
+          onClick={() => setTrashOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 13px', borderRadius: 10, cursor: 'pointer',
+            border: '1.5px solid rgba(255,160,0,0.25)',
+            background: trashOpen ? 'rgba(255,160,0,0.07)' : 'rgba(255,160,0,0.03)',
+            color: AMB, fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 13,
+            transition: 'background .15s',
+          }}
+        >
+          <span style={{ fontSize: 16 }}>🗑</span>
+          <span style={{ flex: 1, textAlign: 'left' }}>Trash Bin</span>
+          <span style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 5,
+            background: trash.length ? 'rgba(255,160,0,0.18)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${trash.length ? 'rgba(255,160,0,0.4)' : 'var(--border)'}`,
+          }}>{trash.length} / 50</span>
+          <span style={{ fontSize: 11, opacity: .6 }}>{trashOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {trashOpen && (
+          <div style={{
+            marginTop: 6, borderRadius: 10, overflow: 'hidden',
+            border: '1.5px solid rgba(255,160,0,0.2)',
+            background: 'rgba(255,160,0,0.03)',
+          }}>
+            {trash.length === 0 ? (
+              <div style={{ padding: '28px 16px', textAlign: 'center', fontFamily: 'var(--mono)', color: 'var(--text3)', fontSize: 11 }}>
+                Trash is empty
+              </div>
+            ) : (
+              <>
+                {/* Purge all */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 10px 4px' }}>
+                  <button onClick={purgeAll} style={{
+                    fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+                    padding: '4px 11px', borderRadius: 6, cursor: 'pointer',
+                    border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
+                    color: 'var(--red)',
+                  }}>Clear all</button>
+                </div>
+
+                {/* Trash items */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {trash.map((p, i) => {
+                    const c = p.side === 'bull' ? G : R
+                    const ago = p.deletedAt
+                      ? (() => {
+                          const s = Math.floor((Date.now() - p.deletedAt) / 1000)
+                          if (s < 60) return `${s}s ago`
+                          if (s < 3600) return `${Math.floor(s/60)}m ago`
+                          if (s < 86400) return `${Math.floor(s/3600)}h ago`
+                          return `${Math.floor(s/86400)}d ago`
+                        })()
+                      : ''
+                    return (
+                      <div key={p.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '9px 11px',
+                        borderBottom: i < trash.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                        background: 'transparent',
+                      }}>
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>{p.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12, color: c,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.name}
+                          </div>
+                          <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
+                            {p.side.toUpperCase()} · {p.conditions?.length ?? 0} conds · {p.tfs?.join(' ') || 'no TF'} · deleted {ago}
+                          </div>
+                        </div>
+                        <button onClick={() => restore(i)} title="Restore pattern" style={{
+                          fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+                          padding: '4px 10px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                          border: '1px solid rgba(0,230,118,0.35)', background: 'rgba(0,230,118,0.08)',
+                          color: G,
+                        }}>↩ Restore</button>
+                        <button onClick={() => purgeOne(i)} title="Delete permanently" style={{
+                          width: 26, height: 26, borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                          border: '1px solid rgba(255,60,60,0.25)', background: 'rgba(255,60,60,0.06)',
+                          color: 'var(--red)', fontSize: 13,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
