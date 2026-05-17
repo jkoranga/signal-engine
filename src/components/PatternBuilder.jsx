@@ -1,6 +1,23 @@
 // ─── Pattern Builder v2 ───────────────────────────────────────────────────────
 import React, { useState, useMemo } from 'react'
 
+// Inject icon picker animations once
+if (typeof document !== 'undefined' && !document.getElementById('pb-icon-styles')) {
+  const st = document.createElement('style')
+  st.id = 'pb-icon-styles'
+  st.textContent = `
+    @keyframes pb-bounce { 0%,100%{transform:translateY(0) scale(1)} 35%{transform:translateY(-7px) scale(1.25)} 65%{transform:translateY(-2px) scale(1.07)} }
+    @keyframes pb-pop    { 0%{transform:scale(0.5) rotate(-12deg);opacity:0} 60%{transform:scale(1.18) rotate(4deg)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+    @keyframes pb-glow   { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5) drop-shadow(0 0 6px currentColor)} }
+    .pb-icon-btn { transition: transform .13s cubic-bezier(.34,1.56,.64,1), box-shadow .13s, background .13s !important; cursor:pointer; }
+    .pb-icon-btn:hover  { transform: scale(1.28) !important; z-index:2; }
+    .pb-icon-btn:active { transform: scale(0.92) !important; }
+    .pb-icon-sel { animation: pb-bounce .5s cubic-bezier(.34,1.56,.64,1); }
+    .pb-icon-new { animation: pb-pop .35s cubic-bezier(.34,1.56,.64,1); }
+  `
+  document.head.appendChild(st)
+}
+
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [
   { id: 'close',     label: 'Close',      short: 'Close',  group: 'Price' },
@@ -49,7 +66,14 @@ const OFFSETS = Array.from({ length: 11 }, (_, i) =>
 )
 
 const TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
-const ICONS   = ['⭐','💹','📈','📉','🚀','💣','🎯','⚡','🔥','💎','🌊','🧲','🔔','🏹']
+const ICON_CATEGORIES = [
+  { label: '📈 Markets',  icons: ['📈','📉','💹','📊','💰','💵','💴','💸','🏦','💳','🪙','💲'] },
+  { label: '🚀 Signals',  icons: ['🚀','⚡','🔥','💎','🎯','🏹','🧲','🔔','⭐','🌟','✨','💫'] },
+  { label: '🌊 Nature',   icons: ['🌊','🌪','⛈','🌙','🌞','🌈','❄️','🌋','🌀','🦁','🐂','🐻'] },
+  { label: '⚔️ Power',    icons: ['⚔️','🛡','🗡','💣','🔱','👑','🏆','🎖','🥇','⚠️','☠️','🔴'] },
+  { label: '🔧 Tools',    icons: ['🔧','🔩','⚙️','🔬','🧪','🧬','📡','🖥','💻','📱','🔭','🛰'] },
+  { label: '🎰 Fun',      icons: ['🎰','🎲','🎯','🃏','🎪','🎭','🎬','🎵','🎸','🥂','🍀','🦋'] },
+]
 
 const G = 'var(--green)'
 const R = 'var(--red)'
@@ -663,6 +687,114 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
   )
 }
 
+// ── Icon Picker ───────────────────────────────────────────────────────────────
+function IconPicker({ value, onChange, color }) {
+  const [open, setOpen]   = useState(false)
+  const [cat, setCat]     = useState(0)
+  const [prevVal, setPrev] = useState(value)
+
+  function pick(ic) {
+    setPrev(value)
+    onChange(ic)
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Trigger button — current icon */}
+      <button
+        className={`pb-icon-btn${value !== prevVal ? ' pb-icon-sel' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: 54, height: 54, borderRadius: 14, fontSize: 26,
+          border: `2px solid ${open ? color : color + '60'}`,
+          background: open ? `${color}22` : `${color}0e`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: open ? `0 0 18px ${color}55` : `0 0 8px ${color}22`,
+          position: 'relative', overflow: 'visible',
+        }}
+      >
+        <span style={{ lineHeight: 1 }}>{value}</span>
+        {/* small edit badge */}
+        <span style={{
+          position: 'absolute', bottom: -4, right: -4,
+          width: 16, height: 16, borderRadius: '50%',
+          background: color, fontSize: 8, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 900,
+        }}>✎</span>
+      </button>
+
+      {/* Dropdown picker */}
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+          <div style={{
+            position: 'absolute', top: 62, left: 0, zIndex: 201,
+            width: 300, borderRadius: 16,
+            background: 'var(--bg1)',
+            border: `1.5px solid ${color}55`,
+            boxShadow: `0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px ${color}22`,
+            overflow: 'hidden',
+            animation: 'pb-pop .25s cubic-bezier(.34,1.56,.64,1)',
+          }}>
+            {/* Category tabs */}
+            <div style={{
+              display: 'flex', overflowX: 'auto', gap: 2, padding: '8px 8px 0',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              scrollbarWidth: 'none',
+            }}>
+              {ICON_CATEGORIES.map((c, i) => (
+                <button key={i} onClick={() => setCat(i)} style={{
+                  flexShrink: 0, padding: '5px 9px', borderRadius: '8px 8px 0 0',
+                  fontSize: 10, fontFamily: 'var(--mono)', fontWeight: cat === i ? 800 : 500,
+                  border: 'none', cursor: 'pointer',
+                  background: cat === i ? `${color}28` : 'transparent',
+                  color: cat === i ? color : 'var(--text3)',
+                  borderBottom: cat === i ? `2px solid ${color}` : '2px solid transparent',
+                  transition: 'all .15s',
+                }}>{c.label}</button>
+              ))}
+            </div>
+
+            {/* Icon grid */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)',
+              gap: 6, padding: 12,
+            }}>
+              {ICON_CATEGORIES[cat].icons.map(ic => {
+                const sel = value === ic
+                return (
+                  <button
+                    key={ic}
+                    className={`pb-icon-btn${sel ? ' pb-icon-sel' : ''}`}
+                    onClick={() => pick(ic)}
+                    style={{
+                      width: '100%', aspectRatio: '1', borderRadius: 10, fontSize: 22,
+                      border: `1.5px solid ${sel ? color : 'rgba(255,255,255,0.07)'}`,
+                      background: sel ? `${color}30` : 'rgba(255,255,255,0.03)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: sel ? `0 0 12px ${color}60, inset 0 0 8px ${color}18` : 'none',
+                    }}
+                  >{ic}</button>
+                )
+              })}
+            </div>
+
+            {/* Footer hint */}
+            <div style={{
+              padding: '6px 12px 10px',
+              fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)',
+              borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center',
+            }}>
+              Tap an icon to select · current: {value}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Pattern editor ────────────────────────────────────────────────────────────
 function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen, allPatternNames }) {
   const [open, setOpen] = useState(!!defaultOpen)
@@ -877,18 +1009,10 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
         <div style={{ borderTop: '1px solid var(--border)', padding: '13px', display: 'flex', flexDirection: 'column', gap: 13 }}>
 
           {/* Name + icon */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <Lbl>ICON</Lbl>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {ICONS.map(ic => (
-                  <button key={ic} onClick={() => s('icon', ic)} style={{
-                    width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 16,
-                    border: `1.5px solid ${pattern.icon === ic ? color : 'var(--border)'}`,
-                    background: pattern.icon === ic ? `${color}22` : 'var(--bg2)',
-                  }}>{ic}</button>
-                ))}
-              </div>
+              <IconPicker value={pattern.icon} onChange={v => s('icon', v)} color={color} />
             </div>
             <div style={{ flex: 1, minWidth: 140 }}>
               <Lbl>NAME</Lbl>
