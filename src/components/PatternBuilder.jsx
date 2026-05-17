@@ -62,6 +62,7 @@ const RHS_MODES = [
   { id: 'pct',     label: '± %',         hint: 'Field ± percent  e.g. EMA20[-2] + 0.35%' },
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
   { id: 'emaDist', label: 'EMA Range',   hint: 'True if left field is within min%…max% distance of right EMA  e.g. Close within −2% to +1% of EMA20' },
+  { id: 'slope',   label: 'Slope %',     hint: '(field[0] / field[-N] − 1) × 100 — how much the field rose over N candles' },
 ]
 
 // Range-check modes — condition applied to every candle in a window
@@ -170,6 +171,12 @@ export function condFormula(c) {
       const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
       return `${windowLabel} ${lhsF} within ${mn}%…${mx}% of ${rhs}`
     }
+    if (c.rhsMode === 'slope') {
+      const n = c.slopeLen ?? 5
+      const thresh = c.slopeNum ?? 0
+      const s = thresh >= 0 ? '+' : ''
+      return `${windowLabel} Slope(${lhsF},${n}) ${op} ${s}${thresh}%`
+    }
     return `${windowLabel} ${lhsF} ${op} ?`
   }
 
@@ -193,6 +200,12 @@ export function condFormula(c) {
     const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
     return `${lhs} within ${mn}%…${mx}% of ${rhs}`
   }
+  if (c.rhsMode === 'slope') {
+    const n = c.slopeLen ?? 5
+    const thresh = c.slopeNum ?? 0
+    const s = thresh >= 0 ? '+' : ''
+    return `Slope(${lhsF},${n}) ${op} ${s}${thresh}%`
+  }
   return `${lhs} ${op} ?`
 }
 
@@ -206,6 +219,7 @@ function blankCond() {
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
     emaDistMin: -2, emaDistMax: 1,   // for emaDist mode: % range around RHS field
+    slopeLen: 5, slopeNum: 0,        // for slope mode: look-back candles + threshold %
     // Range check (applies condition to every candle in a window)
     rangeCheck: false,
     rangeFrom: -1,   // start offset (most recent), e.g. -1
@@ -283,6 +297,23 @@ export function compilePattern(pattern) {
             const distPct = (lhsV / rhsBase - 1) * 100
             results.push(distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1))
             continue
+          } else if (cond.rhsMode === 'slope') {
+            const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
+            const pastCandle = getC(off - n)
+            const pastV = getVal(pastCandle, cond.lhsField, len - 1 + off - n)
+            if (pastV == null || pastV === 0) continue
+            const slopePct = (lhsV / pastV - 1) * 100
+            const thresh   = parseFloat(cond.slopeNum) || 0
+            const op = OP_SYM[cond.op] || cond.op
+            let r
+            if (op === '>')  r = slopePct >  thresh
+            else if (op === '>=') r = slopePct >= thresh
+            else if (op === '<')  r = slopePct <  thresh
+            else if (op === '<=') r = slopePct <= thresh
+            else if (op === '==') r = Math.abs(slopePct - thresh) < 1e-9
+            else r = Math.abs(slopePct - thresh) >= 1e-9
+            results.push(r)
+            continue
           } else {
             // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
             const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
@@ -340,6 +371,22 @@ export function compilePattern(pattern) {
         if (rhsBase == null || rhsBase === 0) return null
         const distPct = (lhsV / rhsBase - 1) * 100
         return distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1)
+      }
+      else if (cond.rhsMode === 'slope') {
+        const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
+        const pastAbsIdx = lhsAbsIdx - n
+        const pastCandle = pastAbsIdx >= 0 ? candles[pastAbsIdx] : null
+        const pastV = getVal(pastCandle, cond.lhsField, pastAbsIdx)
+        if (pastV == null || pastV === 0) return null
+        const slopePct = (lhsV / pastV - 1) * 100
+        const thresh   = parseFloat(cond.slopeNum) || 0
+        const op = OP_SYM[cond.op] || cond.op
+        if (op === '>')  return slopePct >  thresh
+        if (op === '>=') return slopePct >= thresh
+        if (op === '<')  return slopePct <  thresh
+        if (op === '<=') return slopePct <= thresh
+        if (op === '==') return Math.abs(slopePct - thresh) < 1e-9
+        return Math.abs(slopePct - thresh) >= 1e-9
       }
       else if (cond.rhsMode === 'pctdiff') {
         if (rhsBase == null || rhsBase === 0) return null
@@ -754,6 +801,52 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 }}>
                   Left within [{cond.emaDistMin ?? -2}% … {cond.emaDistMax ?? 1}%] of {FIELD_MAP[cond.rhsField || 'ema20']?.short}
                   &nbsp;·&nbsp; negative = below EMA, positive = above EMA
+                </div>
+              </div>
+            )}
+
+            {cond.rhsMode === 'slope' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {/* Which field to measure slope of — same as LHS, just show info */}
+                <div style={{
+                  fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)',
+                  padding: '6px 9px', borderRadius: 7, background: 'rgba(0,0,0,0.18)',
+                }}>
+                  📐 Measures slope of <b style={{ color }}>{FIELD_MAP[cond.lhsField]?.short || cond.lhsField}</b> (same as LEFT field)
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div>
+                    <Lbl>LOOK-BACK CANDLES</Lbl>
+                    <NInput
+                      value={cond.slopeLen ?? 5}
+                      onChange={v => s('slopeLen', Math.max(1, parseInt(v) || 5))}
+                      step="1" w={70}
+                    />
+                  </div>
+                  <div>
+                    <Lbl>THRESHOLD %</Lbl>
+                    <NInput
+                      value={cond.slopeNum ?? 0}
+                      onChange={v => s('slopeNum', v)}
+                      step="0.01" suffix="%" w={80}
+                    />
+                  </div>
+                </div>
+
+                {/* Live explanation */}
+                <div style={{
+                  fontSize: 9, fontFamily: 'var(--mono)', color: color,
+                  padding: '6px 9px', borderRadius: 6,
+                  background: `${color}10`, border: `1px solid ${color}25`,
+                  lineHeight: 1.7,
+                }}>
+                  <b>Slope</b> = ({FIELD_MAP[cond.lhsField]?.short}[0] / {FIELD_MAP[cond.lhsField]?.short}[-{cond.slopeLen ?? 5}] − 1) × 100<br/>
+                  → <b>{FIELD_MAP[cond.lhsField]?.short} rose {cond.op} {cond.slopeNum ?? 0}% over last {cond.slopeLen ?? 5} candles</b><br/>
+                  <span style={{ opacity: .7 }}>
+                    Bullish slope: op <b>&gt;</b> threshold <b>0</b> or <b>0.3</b> &nbsp;·&nbsp;
+                    Bearish slope: op <b>&lt;</b> threshold <b>0</b> or <b>-0.3</b>
+                  </span>
                 </div>
               </div>
             )}
@@ -1265,7 +1358,8 @@ export default function PatternBuilderTab({ settings, update }) {
         <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
         <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
         <b>% Diff</b>: how many % LHS is above/below RHS<br/>
-        <b>EMA Range</b>: Close within −2%…+1% of EMA20 (distance band) &nbsp;·&nbsp;
+        <b>Slope %</b>: how much field rose over N candles &nbsp;·&nbsp; bullish = op &gt; 0 &nbsp;·&nbsp; bearish = op &lt; 0<br/>
+        <b>EMA Range</b>: Close within −2%…+1% of EMA20 &nbsp;·&nbsp;
         <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
         <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
