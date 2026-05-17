@@ -53,6 +53,9 @@ export function useSettings(firebaseUser) {
   const [cloudSaving, setCloudSaving] = useState(false)
   const saveTimeoutRef = useRef(null)
   const prevUidRef = useRef(null)
+  // Track updates that happen while cloud load is in-flight
+  const cloudLoadingRef = useRef(false)
+  const localUpdatedDuringLoadRef = useRef(false)
 
   // Persist to localStorage
   useEffect(() => {
@@ -65,10 +68,29 @@ export function useSettings(firebaseUser) {
     if (!uid || uid === prevUidRef.current) return
     prevUidRef.current = uid
     setCloudSynced(false)
+    cloudLoadingRef.current = true
+    localUpdatedDuringLoadRef.current = false
     loadSettingsFromCloud(uid).then(cloud => {
+      cloudLoadingRef.current = false
       if (cloud) {
         const { _savedAt, ...clean } = cloud
-        setSettings(prev => ({ ...prev, ...clean }))
+        setSettings(prev => {
+          // If user made local changes (e.g. added a pattern) while cloud was loading,
+          // keep their local version of those fields instead of overwriting with cloud data
+          if (localUpdatedDuringLoadRef.current) {
+            // Merge: cloud wins for everything except fields changed locally — we
+            // detect this by comparing against the pre-login localStorage snapshot.
+            // Simplest safe approach: keep local customPatterns if they differ from
+            // what cloud returned (means user already mutated them during load).
+            const merged = { ...prev, ...clean }
+            if (prev.customPatterns !== undefined &&
+                JSON.stringify(prev.customPatterns) !== JSON.stringify(clean.customPatterns)) {
+              merged.customPatterns = prev.customPatterns
+            }
+            return merged
+          }
+          return { ...prev, ...clean }
+        })
         setCloudSynced(true)
       }
     })
@@ -79,6 +101,9 @@ export function useSettings(firebaseUser) {
   }, [firebaseUser])
 
   const update = useCallback((patch) => {
+    if (cloudLoadingRef.current) {
+      localUpdatedDuringLoadRef.current = true
+    }
     setSettings(prev => typeof patch === 'function' ? patch(prev) : { ...prev, ...patch })
   }, [])
 
