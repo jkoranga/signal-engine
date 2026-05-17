@@ -797,7 +797,7 @@ export default function App() {
       window.history.pushState({ signalEngine: true }, '')
 
       if (showExitRef.current) {
-        // Already showing warning — dismiss it (user pressed back to cancel)
+        // Overlay is open — pressing back = Cancel
         setShowExitWarning(false)
         return
       }
@@ -808,10 +808,8 @@ export default function App() {
         setActiveTab(HOME_TAB)
         setPrevTab(tab)
       } else {
-        // Already on home — show exit warning
+        // Already on home — show exit overlay
         setShowExitWarning(true)
-        // Auto-dismiss after 3s
-        setTimeout(() => setShowExitWarning(false), 3000)
       }
     }
 
@@ -891,21 +889,57 @@ export default function App() {
         <LoginModal onClose={() => setShowLoginModal(false)} onUserChange={u => { setUser(u); setShowLoginModal(false) }} />
       )}
 
-      {/* Exit warning toast */}
+      {/* Exit confirmation overlay */}
       {showExitWarning && (
         <div style={{
-          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 2000, pointerEvents: 'none',
-          background: 'rgba(20,20,30,0.96)', border: '1.5px solid rgba(255,200,60,0.55)',
-          borderRadius: 14, padding: '13px 22px',
-          display: 'flex', alignItems: 'center', gap: 10,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-          animation: 'fadeSlideUp .2s ease',
+          position: 'fixed', inset: 0, zIndex: 3000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+          animation: 'fadeIn .15s ease',
         }}>
-          <span style={{ fontSize: 18 }}>⚠️</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Press back again to exit</div>
-            <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>Signal Engine will close</div>
+          <div style={{
+            background: 'var(--bg2)', border: '1.5px solid rgba(255,200,60,0.45)',
+            borderRadius: 20, padding: '28px 24px', width: 'min(300px, 88vw)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            animation: 'scaleIn .18s cubic-bezier(.34,1.56,.64,1)',
+          }}>
+            <div style={{ fontSize: 42, lineHeight: 1 }}>⚠️</div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>Exit Signal Engine?</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', lineHeight: 1.5 }}>
+                {scanProgress.pct >= 0 ? 'A scan is currently running.\nExiting will stop it.' : 'Are you sure you want to exit?'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+              <button
+                onClick={() => setShowExitWarning(false)}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  border: '1.5px solid var(--border2)', background: 'var(--bg3)',
+                  color: 'var(--text2)', fontSize: 14, fontWeight: 700, fontFamily: 'var(--mono)',
+                }}
+              >Cancel</button>
+              <button
+                onClick={() => {
+                  setShowExitWarning(false)
+                  // Try all exit methods for PWA / Capacitor / WebView / browser
+                  try { window.history.go(-(window.history.length)) } catch(_) {}
+                  try { if (window.navigator?.app?.exitApp) { window.navigator.app.exitApp(); return } } catch(_) {}
+                  try { if (window.Capacitor?.Plugins?.App) { window.Capacitor.Plugins.App.exitApp(); return } } catch(_) {}
+                  try { window.close() } catch(_) {}
+                  // Fallback: blank the page so it looks closed
+                  document.body.innerHTML = ''
+                  document.body.style.background = '#000'
+                }}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  border: '1.5px solid rgba(255,60,60,0.6)', background: 'rgba(255,60,60,0.15)',
+                  color: 'var(--red)', fontSize: 14, fontWeight: 800, fontFamily: 'var(--mono)',
+                  boxShadow: '0 0 16px rgba(255,60,60,0.2)',
+                }}
+              >Exit</button>
+            </div>
           </div>
         </div>
       )}
