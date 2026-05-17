@@ -547,7 +547,7 @@ export default function ScanFormationsSection({ settings, update, isFirstVisit }
         const sym = symList[idx]
         setProgressSym(sym)
         try {
-          const candles = await fetchCandles(sym, tf, 60)
+          const candles = await fetchCandles(sym, tf, 60, tkrs[sym] || null)
           for (const scanner of scanners) {
             if (abort?.aborted) continue
             if (isDupe(sym, scanner.id, tf)) continue

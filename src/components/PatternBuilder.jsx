@@ -34,6 +34,12 @@ const FIELDS = [
   { id: 'diMinus',   label: '-DI 14',      short: '-DI',     group: 'Indicator' },
   { id: 'adx',       label: 'ADX 14',      short: 'ADX',     group: 'Indicator' },
   // ── Calc ───────────────────────────────────────────────────────────────────
+  { id: 'changePct',  label: 'Change %',    short: 'Chg%',    group: 'Calc',
+    // (close[0] / close[-1] - 1) × 100  — needs prev candle; returns null if unavailable
+    computed: null, needsPrev: true },
+  { id: 'change24h',  label: '24h Change%', short: '24h%',    group: 'Calc',
+    // Binance 24h priceChangePercent — attached to last candle by fetchCandles when ticker passed
+    computed: c => c.change24h ?? null },
   { id: 'bodyPct',   label: 'Body %',      short: 'Body%',   group: 'Calc', computed: c => c.high !== c.low ? Math.abs(c.close - c.open) / (c.high - c.low) * 100 : 0 },
   { id: 'body',      label: 'Body Size',   short: 'Body',    group: 'Calc', computed: c => Math.abs(c.close - c.open) },
   { id: 'range',     label: 'Range H-L',   short: 'Range',   group: 'Calc', computed: c => c.high - c.low },
@@ -55,6 +61,7 @@ const RHS_MODES = [
   { id: 'mult',    label: '× Mult',      hint: 'Field × multiplier  e.g. EMA20[-2] × 1.5' },
   { id: 'pct',     label: '± %',         hint: 'Field ± percent  e.g. EMA20[-2] + 0.35%' },
   { id: 'pctdiff', label: '% Diff',      hint: '% gap between left and right field' },
+  { id: 'emaDist', label: 'EMA Range',   hint: 'True if left field is within min%…max% distance of right EMA  e.g. Close within −2% to +1% of EMA20' },
 ]
 
 // Range-check modes — condition applied to every candle in a window
@@ -128,6 +135,18 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 // ── Formula label ─────────────────────────────────────────────────────────────
 export function condFormula(c) {
+  // Special label for needsPrev fields
+  function fieldLabel(fieldId, offset) {
+    const f = FIELD_MAP[fieldId]
+    if (!f) return fieldId
+    if (f.needsPrev) {
+      const o = offset === 0 ? '' : `[${offset}]`
+      return `${f.short}${o}`
+    }
+    const o = offset === 0 ? '' : `[${offset}]`
+    return `${f.short}${o}`
+  }
+
   const lhsF = FIELD_MAP[c.lhsField]?.short || c.lhsField
   const op   = c.op
 
@@ -147,6 +166,10 @@ export function condFormula(c) {
       return `${windowLabel} ${lhsF} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
     }
     if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+    if (c.rhsMode === 'emaDist') {
+      const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
+      return `${windowLabel} ${lhsF} within ${mn}%…${mx}% of ${rhs}`
+    }
     return `${windowLabel} ${lhsF} ${op} ?`
   }
 
@@ -166,6 +189,10 @@ export function condFormula(c) {
     return `${lhs} ${op} ${rhs} ${s}${c.rhsPct ?? 0}%`
   }
   if (c.rhsMode === 'pctdiff') return `(${lhs}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
+  if (c.rhsMode === 'emaDist') {
+    const mn = c.emaDistMin ?? -2, mx = c.emaDistMax ?? 1
+    return `${lhs} within ${mn}%…${mx}% of ${rhs}`
+  }
   return `${lhs} ${op} ?`
 }
 
@@ -178,6 +205,7 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
+    emaDistMin: -2, emaDistMax: 1,   // for emaDist mode: % range around RHS field
     // Range check (applies condition to every candle in a window)
     rangeCheck: false,
     rangeFrom: -1,   // start offset (most recent), e.g. -1
@@ -206,10 +234,20 @@ export function compilePattern(pattern) {
       const idx = len - 1 + offset
       return idx >= 0 ? candles[idx] : null
     }
-    function getVal(candle, fieldId) {
+    function getVal(candle, fieldId, candleIdx) {
       if (!candle) return null
       const f = FIELD_MAP[fieldId]
       if (!f) return null
+      // changePct: (close[i] / close[i-1] - 1) * 100
+      if (f.needsPrev) {
+        if (fieldId === 'changePct') {
+          const prevIdx = (candleIdx ?? (len - 1)) - 1
+          const prev = prevIdx >= 0 ? candles[prevIdx] : null
+          if (!prev || prev.close === 0) return null
+          return (candle.close / prev.close - 1) * 100
+        }
+        return null
+      }
       if (f.computed) return f.computed(candle)
       const v = candle[fieldId]
       return v == null ? null : v
@@ -228,18 +266,28 @@ export function compilePattern(pattern) {
         const results = []
         for (let off = start; off <= end; off++) {
           // Evaluate lhs at this offset, rhs at same offset (field-relative) or fixed
+          const absIdx = len - 1 + off
           const lhsCandle = getC(off)
           if (!lhsCandle) continue
-          const lhsV = getVal(lhsCandle, cond.lhsField)
+          const lhsV = getVal(lhsCandle, cond.lhsField, absIdx)
           if (lhsV == null) continue
 
           let rhsV
           if (cond.rhsMode === 'number') {
             rhsV = parseFloat(cond.rhsNum) || 0
+          } else if (cond.rhsMode === 'emaDist') {
+            const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
+            const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
+            const rhsBase   = getVal(rhsCandle, cond.rhsField || cond.lhsField, rhsAbsIdx)
+            if (rhsBase == null || rhsBase === 0) continue
+            const distPct = (lhsV / rhsBase - 1) * 100
+            results.push(distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1))
+            continue
           } else {
             // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
+            const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
             const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
-            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField)
+            const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField, rhsAbsIdx)
             if (rhsBase == null) continue
             if (cond.rhsMode === 'field')   rhsV = rhsBase
             else if (cond.rhsMode === 'mult')  rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1)
@@ -276,16 +324,23 @@ export function compilePattern(pattern) {
       }
 
       // ── Standard single-candle check ──
-      const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField)
+      const lhsAbsIdx = len - 1 + (cond.lhsOffset ?? 0)
+      const lhsV = getVal(getC(cond.lhsOffset), cond.lhsField, lhsAbsIdx)
       if (lhsV == null) return null
 
       let rhsV
-      const rhsBase = cond.rhsField ? getVal(getC(cond.rhsOffset ?? 0), cond.rhsField) : null
+      const rhsAbsIdx = len - 1 + (cond.rhsOffset ?? 0)
+      const rhsBase = cond.rhsField ? getVal(getC(cond.rhsOffset ?? 0), cond.rhsField, rhsAbsIdx) : null
 
       if (cond.rhsMode === 'number')  { rhsV = parseFloat(cond.rhsNum) || 0 }
       else if (cond.rhsMode === 'field')   { if (rhsBase == null) return null; rhsV = rhsBase }
       else if (cond.rhsMode === 'mult')    { if (rhsBase == null) return null; rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1) }
       else if (cond.rhsMode === 'pct')     { if (rhsBase == null) return null; rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100) }
+      else if (cond.rhsMode === 'emaDist') {
+        if (rhsBase == null || rhsBase === 0) return null
+        const distPct = (lhsV / rhsBase - 1) * 100
+        return distPct >= (cond.emaDistMin ?? -2) && distPct <= (cond.emaDistMax ?? 1)
+      }
       else if (cond.rhsMode === 'pctdiff') {
         if (rhsBase == null || rhsBase === 0) return null
         const diff = (lhsV / rhsBase - 1) * 100
@@ -670,6 +725,35 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                 </div>
                 <div style={{ fontSize:9, fontFamily:'var(--mono)', color:'var(--text3)' }}>
                   (Left / Right − 1) × 100 {cond.op} {cond.rhsNum ?? 0}%
+                </div>
+              </div>
+            )}
+
+            {cond.rhsMode === 'emaDist' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <FSelect
+                  value={cond.rhsField || 'ema20'} offset={cond.rhsOffset ?? 0}
+                  onField={v => s('rhsField', v)} onOffset={v => s('rhsOffset', v)}
+                  color={color} hideOffset={!!cond.rangeCheck}
+                />
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <Lbl>MIN %</Lbl>
+                    <NInput value={cond.emaDistMin ?? -2} onChange={v => s('emaDistMin', parseFloat(v))} step="0.1" suffix="%" w={72} />
+                  </div>
+                  <span style={{ fontSize:14, color:'var(--text3)', marginTop:14 }}>…</span>
+                  <div>
+                    <Lbl>MAX %</Lbl>
+                    <NInput value={cond.emaDistMax ?? 1} onChange={v => s('emaDistMax', parseFloat(v))} step="0.1" suffix="%" w={72} />
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: 9, fontFamily: 'var(--mono)', color: color,
+                  padding: '5px 8px', borderRadius: 6,
+                  background: `${color}10`, border: `1px solid ${color}25`,
+                }}>
+                  Left within [{cond.emaDistMin ?? -2}% … {cond.emaDistMax ?? 1}%] of {FIELD_MAP[cond.rhsField || 'ema20']?.short}
+                  &nbsp;·&nbsp; negative = below EMA, positive = above EMA
                 </div>
               </div>
             )}
@@ -1181,7 +1265,9 @@ export default function PatternBuilderTab({ settings, update }) {
         <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
         <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
         <b>% Diff</b>: how many % LHS is above/below RHS<br/>
-        <b>DMI/ADX</b>: +DI &gt; -DI = bullish trend &nbsp;·&nbsp; ADX &gt; 25 = strong trend &nbsp;·&nbsp; ADX &gt; 20 = trending<br/>
+        <b>EMA Range</b>: Close within −2%…+1% of EMA20 (distance band) &nbsp;·&nbsp;
+        <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
+        <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
         Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
       </div>
 

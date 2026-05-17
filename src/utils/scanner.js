@@ -7,7 +7,7 @@ const BASES = [
   'https://api4.binance.com',
 ]
 
-export async function fetchCandles(symbol, interval = '15m', limit = 60) {
+export async function fetchCandles(symbol, interval = '15m', limit = 60, ticker = null) {
   const path = `/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
   for (const base of BASES) {
     try {
@@ -44,6 +44,11 @@ export async function fetchCandles(symbol, interval = '15m', limit = 60) {
       attachEMAn(candles, 600, 'ema600')
       attachRSI(candles, 14)
       attachDMI(candles, 14)
+      // Attach 24h priceChangePercent to every candle if ticker provided
+      if (ticker && ticker.priceChangePercent != null) {
+        const pcp = ticker.priceChangePercent
+        for (const c of candles) c.change24h = pcp
+      }
       return candles
     } catch { /* try next mirror */ }
   }

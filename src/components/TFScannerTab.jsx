@@ -404,7 +404,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
         const sym = symList[idx]
         setProgressSym(sym)
         try {
-          const candles = await fetchCandles(sym, timeframe, 60)
+          const candles = await fetchCandles(sym, timeframe, 60, tkrs[sym] || null)
           for (const scanner of scanners) {
             if (abort?.aborted) continue
             if (isDupe(sym, scanner.id, timeframe)) continue
