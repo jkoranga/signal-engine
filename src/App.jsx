@@ -61,9 +61,12 @@ function LogoMark({ size=32 }) {
 }
 
 function LoginModal({ onClose, onUserChange }) {
-  const [email, setEmail] = React.useState('')
-  const [pass,  setPass]  = React.useState('')
-  const [err,   setErr]   = React.useState('')
+  const [tab,     setTab]     = React.useState('signin')  // 'signin' | 'signup'
+  const [email,   setEmail]   = React.useState('')
+  const [pass,    setPass]    = React.useState('')
+  const [name,    setName]    = React.useState('')
+  const [confirm, setConfirm] = React.useState('')
+  const [err,     setErr]     = React.useState('')
   const [loading, setLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -72,52 +75,103 @@ function LoginModal({ onClose, onUserChange }) {
     return () => document.removeEventListener('keydown', fn)
   }, [onClose])
 
+  // Reset fields when switching tabs
+  function switchTab(t) {
+    setTab(t); setErr('')
+    setEmail(''); setPass(''); setName(''); setConfirm('')
+  }
+
   async function handleGoogle() {
-    setErr('')
-    setLoading(true)
+    setErr(''); setLoading(true)
     try {
       const { loginWithGoogle, checkConfigured } = await import('./firebase.js')
       if (!checkConfigured()) { setErr('Firebase not configured. Add VITE_FB_* to .env'); return }
       const u = await loginWithGoogle()
-      onUserChange(u)
-      onClose()
+      onUserChange(u); onClose()
     } catch(e) { setErr(e.message) }
     finally { setLoading(false) }
   }
 
-  async function handleEmail(e) {
-    e.preventDefault(); setErr('')
-    setLoading(true)
+  async function handleSignIn(e) {
+    e.preventDefault(); setErr(''); setLoading(true)
     try {
       const { loginWithEmail, checkConfigured } = await import('./firebase.js')
       if (!checkConfigured()) { setErr('Firebase not configured.'); return }
       const u = await loginWithEmail(email, pass)
-      onUserChange(u)
-      onClose()
+      onUserChange(u); onClose()
     } catch(e) { setErr(e.message) }
     finally { setLoading(false) }
+  }
+
+  async function handleSignUp(e) {
+    e.preventDefault(); setErr('')
+    if (!name.trim())          { setErr('Please enter your name.'); return }
+    if (pass.length < 6)       { setErr('Password must be at least 6 characters.'); return }
+    if (pass !== confirm)      { setErr('Passwords do not match.'); return }
+    setLoading(true)
+    try {
+      const { signUpWithEmail, checkConfigured } = await import('./firebase.js')
+      if (!checkConfigured()) { setErr('Firebase not configured.'); return }
+      const u = await signUpWithEmail(email, pass, name)
+      onUserChange(u); onClose()
+    } catch(e) { setErr(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const isSignIn = tab === 'signin'
+  const accent = isSignIn ? 'var(--green)' : 'var(--accent)'
+  const accentDim = isSignIn ? 'var(--green-dim)' : 'var(--accent-dim)'
+
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box', padding: '9px 11px',
+    borderRadius: 8, border: '1px solid var(--border2)',
+    background: 'var(--bg3)', color: 'var(--text)',
+    fontSize: 13, fontFamily: 'inherit', outline: 'none',
   }
 
   return (
     <div style={{
       position:'fixed', inset:0, zIndex:1000,
       display:'flex', alignItems:'center', justifyContent:'center',
-      background:'rgba(0,0,0,0.7)', backdropFilter:'blur(4px)',
+      background:'rgba(0,0,0,0.72)', backdropFilter:'blur(5px)',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background:'var(--bg2)', border:'1px solid var(--border2)',
-        borderRadius:16, padding:'28px 24px', width:'min(340px, 92vw)',
-        boxShadow:'0 12px 48px rgba(0,0,0,0.7)',
+        borderRadius:18, padding:'24px 22px', width:'min(360px, 94vw)',
+        boxShadow:'0 16px 56px rgba(0,0,0,0.75)',
       }}>
+
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:22 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:17, color:'var(--text)' }}>Sign In</div>
-            <div style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:3 }}>Sync settings across devices</div>
+            <div style={{ fontWeight:800, fontSize:17, color:'var(--text)' }}>
+              {isSignIn ? 'Welcome Back' : 'Create Account'}
+            </div>
+            <div style={{ fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:3 }}>
+              {isSignIn ? 'Sync settings across devices' : 'Start tracking signals today'}
+            </div>
           </div>
           <button onClick={onClose} style={{ width:28,height:28,borderRadius:'50%',border:'1px solid var(--border)',
             background:'var(--bg3)',color:'var(--text3)',cursor:'pointer',fontSize:16,display:'flex',
             alignItems:'center',justifyContent:'center' }}>✕</button>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{
+          display:'flex', borderRadius:10, overflow:'hidden',
+          border:'1px solid var(--border2)', marginBottom:20,
+          background:'var(--bg3)',
+        }}>
+          {[['signin','Sign In'],['signup','Sign Up']].map(([id, label]) => (
+            <button key={id} onClick={() => switchTab(id)} style={{
+              flex:1, padding:'9px', border:'none', cursor:'pointer',
+              fontFamily:'var(--mono)', fontWeight:700, fontSize:12,
+              background: tab === id ? (id === 'signin' ? 'var(--green-dim)' : 'var(--accent-dim)') : 'transparent',
+              color: tab === id ? (id === 'signin' ? 'var(--green)' : 'var(--accent)') : 'var(--text3)',
+              borderBottom: tab === id ? `2px solid ${id === 'signin' ? 'var(--green)' : 'var(--accent)'}` : '2px solid transparent',
+              transition: 'all .15s',
+            }}>{label}</button>
+          ))}
         </div>
 
         {/* Google */}
@@ -126,7 +180,7 @@ function LoginModal({ onClose, onUserChange }) {
           width:'100%', padding:'11px', borderRadius:8,
           border:'1px solid var(--border2)', background:'var(--bg3)',
           color:'var(--text)', fontSize:13, fontWeight:600, cursor:'pointer',
-          marginBottom:16, transition:'all .15s',
+          marginBottom:16, transition:'all .15s', boxSizing:'border-box',
         }}
           onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.background='var(--accent-dim)'}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.background='var(--bg3)'}}
@@ -137,7 +191,7 @@ function LoginModal({ onClose, onUserChange }) {
             <path fill="#FBBC05" d="M24 44c5.2 0 9.8-1.7 13.4-4.7l-6.2-5.2C29.4 35.3 26.8 36 24 36c-5.6 0-10.1-3.5-11.7-8.4l-7 5.3C8 39.4 15.4 44 24 44z"/>
             <path fill="#EA4335" d="M44.5 20H24v8.5h11.7c-.9 2.5-2.5 4.6-4.7 6.1l6.2 5.2C40.8 36.3 44.5 30.6 44.5 24c0-1.3-.1-2.7-.2-4z"/>
           </svg>
-          {loading ? 'Signing in…' : 'Continue with Google'}
+          {loading ? (isSignIn ? 'Signing in…' : 'Creating…') : `Continue with Google`}
         </button>
 
         {/* Divider */}
@@ -147,22 +201,47 @@ function LoginModal({ onClose, onUserChange }) {
           <div style={{ flex:1, height:1, background:'var(--border)' }} />
         </div>
 
-        {/* Email form */}
-        <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-          <input className="field" type="email" placeholder="Email" value={email}
-            onChange={e => setEmail(e.target.value)} style={{ fontSize:13 }} />
-          <input className="field" type="password" placeholder="Password" value={pass}
-            onChange={e => setPass(e.target.value)} style={{ fontSize:13 }} />
-          <button onClick={handleEmail} disabled={loading} style={{
-            padding:'10px', borderRadius:8,
-            border:'1px solid var(--green2)', background:'var(--green-dim)',
-            color:'var(--green)', fontSize:13, fontWeight:700, cursor:'pointer',
-          }}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </button>
-        </div>
+        {/* Sign In form */}
+        {isSignIn && (
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Password" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSignIn(e)} />
+            <button onClick={handleSignIn} disabled={loading} style={{
+              padding:'10px', borderRadius:8, border:`1px solid var(--green2)`,
+              background:'var(--green-dim)', color:'var(--green)',
+              fontSize:13, fontWeight:700, cursor:'pointer',
+            }}>{loading ? 'Signing in…' : 'Sign In'}</button>
+            <div style={{ textAlign:'center', fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2 }}>
+              No account?{' '}
+              <span onClick={() => switchTab('signup')} style={{ color:'var(--accent)', cursor:'pointer', fontWeight:700 }}>
+                Create one →
+              </span>
+            </div>
+          </div>
+        )}
 
-        {err && <div style={{ marginTop:10, fontSize:11, color:'var(--red)', fontFamily:'var(--mono)' }}>{err}</div>}
+        {/* Sign Up form */}
+        {!isSignIn && (
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            <input style={inputStyle} type="text"     placeholder="Your name"       value={name}    onChange={e => setName(e.target.value)} />
+            <input style={inputStyle} type="email"    placeholder="Email"           value={email}   onChange={e => setEmail(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Password (6+ chars)"  value={pass}    onChange={e => setPass(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Confirm password" value={confirm} onChange={e => setConfirm(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSignUp(e)} />
+            <button onClick={handleSignUp} disabled={loading} style={{
+              padding:'10px', borderRadius:8, border:`1px solid var(--accent)`,
+              background:'var(--accent-dim)', color:'var(--accent)',
+              fontSize:13, fontWeight:700, cursor:'pointer',
+            }}>{loading ? 'Creating account…' : 'Create Account'}</button>
+            <div style={{ textAlign:'center', fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2 }}>
+              Already have an account?{' '}
+              <span onClick={() => switchTab('signin')} style={{ color:'var(--green)', cursor:'pointer', fontWeight:700 }}>
+                Sign in →
+              </span>
+            </div>
+          </div>
+        )}
+
+        {err && <div style={{ marginTop:10, fontSize:11, color:'var(--red)', fontFamily:'var(--mono)', lineHeight:1.5 }}>{err}</div>}
       </div>
     </div>
   )
@@ -700,6 +779,45 @@ export default function App() {
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
   const [showPatterns, setShowPatterns] = useState(false)
   const [prevTab, setPrevTab] = useState('15m')
+  const [showExitWarning, setShowExitWarning] = useState(false)
+
+  // Back button: go home first press, show exit warning second press
+  const HOME_TAB = '15m'
+  const activeTabRef = React.useRef(activeTab)
+  const showExitRef  = React.useRef(false)
+  activeTabRef.current  = activeTab
+  showExitRef.current   = showExitWarning
+
+  useEffect(() => {
+    // Push an extra history entry so we can intercept popstate
+    window.history.pushState({ signalEngine: true }, '')
+
+    function handlePop() {
+      // Always push state back so back button keeps working
+      window.history.pushState({ signalEngine: true }, '')
+
+      if (showExitRef.current) {
+        // Already showing warning — dismiss it (user pressed back to cancel)
+        setShowExitWarning(false)
+        return
+      }
+
+      const tab = activeTabRef.current
+      if (tab !== HOME_TAB) {
+        // Not on home — navigate to home
+        setActiveTab(HOME_TAB)
+        setPrevTab(tab)
+      } else {
+        // Already on home — show exit warning
+        setShowExitWarning(true)
+        // Auto-dismiss after 3s
+        setTimeout(() => setShowExitWarning(false), 3000)
+      }
+    }
+
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [])
 
   const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
 
@@ -771,6 +889,25 @@ export default function App() {
     <div className="app-shell-v2">
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} onUserChange={u => { setUser(u); setShowLoginModal(false) }} />
+      )}
+
+      {/* Exit warning toast */}
+      {showExitWarning && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 2000, pointerEvents: 'none',
+          background: 'rgba(20,20,30,0.96)', border: '1.5px solid rgba(255,200,60,0.55)',
+          borderRadius: 14, padding: '13px 22px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+          animation: 'fadeSlideUp .2s ease',
+        }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Press back again to exit</div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>Signal Engine will close</div>
+          </div>
+        </div>
       )}
       <header className="topbar-v2" style={{
         borderBottom: 'none',
