@@ -168,9 +168,11 @@ export function condFormula(c) {
     if (c.rhsMode === 'pctdiff') return `${windowLabel} (${lhsF}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
     if (c.rhsMode === 'slope') {
       const n = c.slopeLen ?? 5
+      const sk = c.slopeSkip ?? 0
       const thresh = c.slopeNum ?? 0
       const s = thresh >= 0 ? '+' : ''
-      return `${windowLabel} Slope(${lhsF},${n}) ${op} ${s}${thresh}%`
+      const from = sk > 0 ? `[-${sk}]` : '[0]'
+      return `${windowLabel} Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
     }
     return `${windowLabel} ${lhsF} ${op} ?`
   }
@@ -193,9 +195,10 @@ export function condFormula(c) {
   if (c.rhsMode === 'pctdiff') return `(${lhs}/${rhs}−1)×100 ${op} ${c.rhsNum ?? 0}%`
   if (c.rhsMode === 'slope') {
     const n = c.slopeLen ?? 5
+    const sk = c.slopeSkip ?? 0
     const thresh = c.slopeNum ?? 0
     const s = thresh >= 0 ? '+' : ''
-    return `Slope(${lhsF},${n}) ${op} ${s}${thresh}%`
+    return `Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
   }
   return `${lhs} ${op} ?`
 }
@@ -209,7 +212,7 @@ function blankCond() {
     op: '>',
     rhsMode: 'mult', rhsField: 'ema20', rhsOffset: -2,
     rhsNum: 0, rhsMult: 1, rhsPct: 0,
-    slopeLen: 5, slopeNum: 0,        // for slope mode: look-back candles + threshold %
+    slopeLen: 5, slopeSkip: 0, slopeNum: 0, // for slope mode: look-back candles, skip recent candles, threshold %
     // Range check (applies condition to every candle in a window)
     rangeCheck: false,
     rangeFrom: -1,   // start offset (most recent), e.g. -1
@@ -280,11 +283,14 @@ export function compilePattern(pattern) {
           if (cond.rhsMode === 'number') {
             rhsV = parseFloat(cond.rhsNum) || 0
           } else if (cond.rhsMode === 'slope') {
-            const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
-            const pastCandle = getC(off - n)
-            const pastV = getVal(pastCandle, cond.lhsField, len - 1 + off - n)
-            if (pastV == null || pastV === 0) continue
-            const slopePct = (lhsV / pastV - 1) * 100
+            const n  = Math.max(1, Math.round(cond.slopeLen ?? 5))
+            const sk = Math.max(0, Math.round(cond.slopeSkip ?? 0))
+            const nowCandle  = getC(off - sk)
+            const nowV       = getVal(nowCandle, cond.lhsField, len - 1 + off - sk)
+            const pastCandle = getC(off - sk - n)
+            const pastV      = getVal(pastCandle, cond.lhsField, len - 1 + off - sk - n)
+            if (nowV == null || pastV == null || pastV === 0) continue
+            const slopePct = (nowV / pastV - 1) * 100
             const thresh   = parseFloat(cond.slopeNum) || 0
             const op = OP_SYM[cond.op] || cond.op
             let r
@@ -350,12 +356,16 @@ export function compilePattern(pattern) {
       else if (cond.rhsMode === 'mult')    { if (rhsBase == null) return null; rhsV = rhsBase * (parseFloat(cond.rhsMult) || 1) }
       else if (cond.rhsMode === 'pct')     { if (rhsBase == null) return null; rhsV = rhsBase * (1 + (parseFloat(cond.rhsPct) || 0) / 100) }
       else if (cond.rhsMode === 'slope') {
-        const n = Math.max(1, Math.round(cond.slopeLen ?? 5))
-        const pastAbsIdx = lhsAbsIdx - n
+        const n  = Math.max(1, Math.round(cond.slopeLen ?? 5))
+        const sk = Math.max(0, Math.round(cond.slopeSkip ?? 0))
+        const nowAbsIdx  = lhsAbsIdx - sk
+        const pastAbsIdx = lhsAbsIdx - sk - n
+        const nowCandle  = nowAbsIdx  >= 0 ? candles[nowAbsIdx]  : null
         const pastCandle = pastAbsIdx >= 0 ? candles[pastAbsIdx] : null
+        const nowV  = getVal(nowCandle,  cond.lhsField, nowAbsIdx)
         const pastV = getVal(pastCandle, cond.lhsField, pastAbsIdx)
-        if (pastV == null || pastV === 0) return null
-        const slopePct = (lhsV / pastV - 1) * 100
+        if (nowV == null || pastV == null || pastV === 0) return null
+        const slopePct = (nowV / pastV - 1) * 100
         const thresh   = parseFloat(cond.slopeNum) || 0
         const op = OP_SYM[cond.op] || cond.op
         if (op === '>')  return slopePct >  thresh
@@ -784,6 +794,27 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                       <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
                     </div>
                   </div>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Lbl>SKIP RECENT CANDLES</Lbl>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700,
+                        color: (cond.slopeSkip ?? 0) > 0 ? color : 'var(--text3)',
+                        background: (cond.slopeSkip ?? 0) > 0 ? `${color}20` : 'rgba(0,0,0,0.18)',
+                        border: `1px solid ${(cond.slopeSkip ?? 0) > 0 ? color + '40' : 'var(--border)'}`,
+                        borderRadius: 5, padding: '1px 7px', fontFamily: 'var(--mono)',
+                      }}>{cond.slopeSkip ?? 0}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={1}
+                      value={cond.slopeSkip ?? 0}
+                      onChange={e => s('slopeSkip', parseInt(e.target.value))}
+                      style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                      <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+                    </div>
+                  </div>
                   <div>
                     <Lbl>THRESHOLD %</Lbl>
                     <NInput
@@ -801,12 +832,22 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
                   background: `${color}10`, border: `1px solid ${color}25`,
                   lineHeight: 1.7,
                 }}>
-                  <b>Slope</b> = ({FIELD_MAP[cond.lhsField]?.short}[0] / {FIELD_MAP[cond.lhsField]?.short}[-{cond.slopeLen ?? 5}] − 1) × 100<br/>
-                  → <b>{FIELD_MAP[cond.lhsField]?.short} rose {cond.op} {cond.slopeNum ?? 0}% over last {cond.slopeLen ?? 5} candles</b><br/>
-                  <span style={{ opacity: .7 }}>
-                    Bullish slope: op <b>&gt;</b> threshold <b>0</b> or <b>0.3</b> &nbsp;·&nbsp;
-                    Bearish slope: op <b>&lt;</b> threshold <b>0</b> or <b>-0.3</b>
-                  </span>
+                  {(() => {
+                    const sk = cond.slopeSkip ?? 0
+                    const n  = cond.slopeLen ?? 5
+                    const f  = FIELD_MAP[cond.lhsField]?.short
+                    const nowRef  = sk > 0 ? `[-${sk}]` : '[0]'
+                    const pastRef = `[-${sk + n}]`
+                    return <>
+                      <b>Slope</b> = ({f}{nowRef} / {f}{pastRef} − 1) × 100
+                      {sk > 0 && <span style={{ color: 'var(--text3)' }}> &nbsp;·&nbsp; skipping {sk} recent candle{sk > 1 ? 's' : ''}</span>}<br/>
+                      → <b>{f}{nowRef} vs {f}{pastRef} over {n} candles</b><br/>
+                      <span style={{ opacity: .7 }}>
+                        Bullish slope: op <b>&gt;</b> threshold <b>0</b> or <b>0.3</b> &nbsp;·&nbsp;
+                        Bearish slope: op <b>&lt;</b> threshold <b>0</b> or <b>-0.3</b>
+                      </span>
+                    </>
+                  })()}
                 </div>
               </div>
             )}
