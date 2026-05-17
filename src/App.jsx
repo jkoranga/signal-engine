@@ -817,7 +817,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePop)
   }, [])
 
-  const { settings, update, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit } = useSettings(user)
+  const { settings, update, reset, cloudSynced, cloudSaving, saveNow, saveNowWithPatch, isFirstVisit } = useSettings(user)
 
   useEffect(() => {
     if (!checkConfigured()) { setAuthReady(true); return }
@@ -1075,7 +1075,7 @@ export default function App() {
         )}
         {activeTab === 'builder' && (
           <ErrorBoundary>
-            <PatternBuilderTab settings={settings} update={update} />
+            <PatternBuilderTab settings={settings} update={update} saveNowWithPatch={saveNowWithPatch} />
           </ErrorBoundary>
         )}
       </main>

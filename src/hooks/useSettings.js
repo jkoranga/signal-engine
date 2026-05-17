@@ -132,6 +132,20 @@ export function useSettings(firebaseUser) {
     return ok
   }, [firebaseUser, settings])
 
+  // Save immediately with a patch merged in — use this when you need to save
+  // right after update() before React has flushed the new state
+  const saveNowWithPatch = useCallback(async (patch) => {
+    const uid = firebaseUser?.uid
+    if (!uid) return false
+    clearTimeout(saveTimeoutRef.current)
+    setCloudSaving(true)
+    const merged = { ...settings, ...patch }
+    const ok = await saveSettingsToCloud(uid, merged)
+    if (ok) setCloudSynced(true)
+    setCloudSaving(false)
+    return ok
+  }, [firebaseUser, settings])
+
   const updateNested = useCallback((key, patch) => {
     setSettings(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
   }, [])
@@ -141,5 +155,5 @@ export function useSettings(firebaseUser) {
     setSettings(DEFAULTS)
   }, [])
 
-  return { settings, update, updateNested, reset, cloudSynced, cloudSaving, saveNow, isFirstVisit: isFirstVisit.current }
+  return { settings, update, updateNested, reset, cloudSynced, cloudSaving, saveNow, saveNowWithPatch, isFirstVisit: isFirstVisit.current }
 }

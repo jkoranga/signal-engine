@@ -1294,14 +1294,14 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
-export default function PatternBuilderTab({ settings, update }) {
+export default function PatternBuilderTab({ settings, update, saveNowWithPatch }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
   const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
 
-  function savePatterns(ps) { update({ customPatterns: ps }) }
-  function saveTrash(ts)    { update({ deletedPatterns: ts }) }
+  function savePatterns(ps) { update({ customPatterns: ps }); saveNowWithPatch?.({ customPatterns: ps }) }
+  function saveTrash(ts)    { update({ deletedPatterns: ts }); saveNowWithPatch?.({ deletedPatterns: ts }) }
 
   function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
   function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
