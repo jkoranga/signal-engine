@@ -120,6 +120,9 @@ function mirrorCond(cond) {
   // Invert pct: +0.5% → -0.5%
   const rhsPct = cond.rhsPct != null ? -parseFloat(cond.rhsPct) : cond.rhsPct
 
+  // Invert slope threshold: +0.015% → -0.015%
+  const slopeNum = cond.slopeNum != null ? -parseFloat(cond.slopeNum) : cond.slopeNum
+
   return {
     ...cond,
     id: uid(),
@@ -127,6 +130,7 @@ function mirrorCond(cond) {
     lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
     rhsMult,
     rhsPct,
+    slopeNum,
     label: cond.label ? `Mirror of ${cond.label}` : '',
   }
 }
