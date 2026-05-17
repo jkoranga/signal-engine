@@ -35,6 +35,9 @@ export const DEFAULTS = {
   wickTouchPct:  1.5,
   scoreFilterEnabled: false,
   scoreMin:           5,
+  // Timestamps to resolve cloud vs local conflicts for pattern fields
+  _customPatternsAt:  0,
+  _deletedPatternsAt: 0,
 }
 
 function load() {
@@ -75,21 +78,27 @@ export function useSettings(firebaseUser) {
       if (cloud) {
         const { _savedAt, ...clean } = cloud
         setSettings(prev => {
-          // If user made local changes (e.g. added a pattern) while cloud was loading,
-          // keep their local version of those fields instead of overwriting with cloud data
-          if (localUpdatedDuringLoadRef.current) {
-            // Merge: cloud wins for everything except fields changed locally — we
-            // detect this by comparing against the pre-login localStorage snapshot.
-            // Simplest safe approach: keep local customPatterns if they differ from
-            // what cloud returned (means user already mutated them during load).
-            const merged = { ...prev, ...clean }
-            if (prev.customPatterns !== undefined &&
-                JSON.stringify(prev.customPatterns) !== JSON.stringify(clean.customPatterns)) {
-              merged.customPatterns = prev.customPatterns
-            }
-            return merged
+          const merged = { ...prev, ...clean }
+
+          // Always keep whichever version of customPatterns is newer.
+          // _customPatternsAt is a timestamp written every time patterns are saved.
+          const localPatternsAt = prev._customPatternsAt  || 0
+          const cloudPatternsAt = clean._customPatternsAt || 0
+          if (localPatternsAt >= cloudPatternsAt) {
+            // Local is same age or newer — keep local patterns
+            merged.customPatterns    = prev.customPatterns
+            merged._customPatternsAt = prev._customPatternsAt
           }
-          return { ...prev, ...clean }
+
+          // Same treatment for deleted/trash patterns
+          const localTrashAt = prev._deletedPatternsAt  || 0
+          const cloudTrashAt = clean._deletedPatternsAt || 0
+          if (localTrashAt >= cloudTrashAt) {
+            merged.deletedPatterns    = prev.deletedPatterns
+            merged._deletedPatternsAt = prev._deletedPatternsAt
+          }
+
+          return merged
         })
         setCloudSynced(true)
       }

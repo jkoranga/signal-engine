@@ -1300,8 +1300,16 @@ export default function PatternBuilderTab({ settings, update, saveNowWithPatch }
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
 
-  function savePatterns(ps) { update({ customPatterns: ps }); saveNowWithPatch?.({ customPatterns: ps }) }
-  function saveTrash(ts)    { update({ deletedPatterns: ts }); saveNowWithPatch?.({ deletedPatterns: ts }) }
+  function savePatterns(ps) {
+    const now = Date.now()
+    update({ customPatterns: ps, _customPatternsAt: now })
+    saveNowWithPatch?.({ customPatterns: ps, _customPatternsAt: now })
+  }
+  function saveTrash(ts) {
+    const now = Date.now()
+    update({ deletedPatterns: ts, _deletedPatternsAt: now })
+    saveNowWithPatch?.({ deletedPatterns: ts, _deletedPatternsAt: now })
+  }
 
   function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
   function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
