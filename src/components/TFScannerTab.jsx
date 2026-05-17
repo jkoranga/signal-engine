@@ -217,7 +217,7 @@ function DetailSheet({ alert, onClose }) {
 }
 
 // ── Main TFScannerTab ─────────────────────────────────────
-export default function TFScannerTab({ timeframe, tabColor, settings, update, user, isFirstVisit, isActive, onAlertCount, onScanProgress }) {
+export default function TFScannerTab({ timeframe, tabColor, settings, update, saveNowWithPatch, user, isFirstVisit, isActive, onAlertCount, onScanProgress }) {
   // Per-tab persistent settings stored under tf-specific keys
   const tfKey = tf => `${tf}_${timeframe}`
   const scanMode      = settings[tfKey('scanMode')]      ?? settings.scanMode      ?? 'all'
@@ -240,7 +240,10 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, us
   const setVolumeFilter  = v   => setTfSetting('volumeFilter', v)
   const setScannerEnabled = fn => {
     const next = typeof fn==='function' ? fn(scannerEnabled) : fn
-    setTfSetting('scannerEnabled', next)
+    const key  = tfKey('scannerEnabled')
+    update({ [key]: next })
+    // Save immediately so scanner toggles survive refresh
+    saveNowWithPatch?.({ [key]: next })
   }
 
   // ── Ephemeral state ──────────────────────────────────────

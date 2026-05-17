@@ -1057,6 +1057,7 @@ export default function App() {
                 tabColor={tab.color}
                 settings={settings}
                 update={update}
+                saveNowWithPatch={saveNowWithPatch}
                 user={user}
                 isFirstVisit={isFirstVisit && tab.id==='15m'}
                 isActive={activeTab===tab.id}
