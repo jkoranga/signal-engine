@@ -1,22 +1,5 @@
-// ─── Pattern Builder v2 ───────────────────────────────────────────────────────
+// ─── Pattern Builder v3 ───────────────────────────────────────────────────────
 import React, { useState, useMemo } from 'react'
-
-// Inject icon picker animations once
-if (typeof document !== 'undefined' && !document.getElementById('pb-icon-styles')) {
-  const st = document.createElement('style')
-  st.id = 'pb-icon-styles'
-  st.textContent = `
-    @keyframes pb-bounce { 0%,100%{transform:translateY(0) scale(1)} 35%{transform:translateY(-7px) scale(1.25)} 65%{transform:translateY(-2px) scale(1.07)} }
-    @keyframes pb-pop    { 0%{transform:scale(0.5) rotate(-12deg);opacity:0} 60%{transform:scale(1.18) rotate(4deg)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
-    @keyframes pb-glow   { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5) drop-shadow(0 0 6px currentColor)} }
-    .pb-icon-btn { transition: transform .13s cubic-bezier(.34,1.56,.64,1), box-shadow .13s, background .13s !important; cursor:pointer; }
-    .pb-icon-btn:hover  { transform: scale(1.28) !important; z-index:2; }
-    .pb-icon-btn:active { transform: scale(0.92) !important; }
-    .pb-icon-sel { animation: pb-bounce .5s cubic-bezier(.34,1.56,.64,1); }
-    .pb-icon-new { animation: pb-pop .35s cubic-bezier(.34,1.56,.64,1); }
-  `
-  document.head.appendChild(st)
-}
 
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [

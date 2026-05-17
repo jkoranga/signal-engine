@@ -373,10 +373,10 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 
 /* Builder tab — glowing P */
 @keyframes pb-tab-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px #c6ff00aa); }
-  50%       { filter: drop-shadow(0 0 10px #c6ff00ff) drop-shadow(0 0 20px #c6ff0066); }
+  0%, 100% { text-shadow: 0 0 4px #c6ff00aa, 0 0 8px #c6ff0055; }
+  50%       { text-shadow: 0 0 10px #c6ff00ff, 0 0 22px #c6ff0088, 0 0 40px #c6ff0033; }
 }
-.bottom-tab-builder-active svg {
+.bottom-tab-builder-active span {
   animation: pb-tab-glow 1.8s ease-in-out infinite;
 }
 
@@ -572,3 +572,23 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
   display: block;
 }
 .field:focus { border-color: var(--accent); }
+
+/* ── Pattern Builder icon picker animations ── */
+@keyframes pb-bounce {
+  0%,100% { transform: translateY(0) scale(1); }
+  35%     { transform: translateY(-7px) scale(1.25); }
+  65%     { transform: translateY(-2px) scale(1.07); }
+}
+@keyframes pb-pop {
+  0%   { transform: scale(0.5) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(1.18) rotate(4deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.pb-icon-btn {
+  transition: transform .13s cubic-bezier(.34,1.56,.64,1), box-shadow .13s, background .13s !important;
+  cursor: pointer;
+}
+.pb-icon-btn:hover  { transform: scale(1.28) !important; z-index: 2; }
+.pb-icon-btn:active { transform: scale(0.92) !important; }
+.pb-icon-sel { animation: pb-bounce .5s cubic-bezier(.34,1.56,.64,1); }
+.pb-icon-new { animation: pb-pop .35s cubic-bezier(.34,1.56,.64,1); }
