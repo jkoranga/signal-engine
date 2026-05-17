@@ -558,10 +558,6 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
         <ScanSettingsSection settings={settings} update={update}/>
       </Accordion>
 
-      <Accordion title={`Patterns · ${ALL_SCANNERS.length} total`} icon="🔬" badge="PER-TF" defaultOpen={false} accentColor="rgba(150,100,255,0.6)" openKey={openKey}>
-        <PatternManager settings={settings} update={update}/>
-      </Accordion>
-
       <Accordion title="Alerts & Notifications" icon="◈" defaultOpen={false} accentColor="rgba(255,167,38,0.5)" openKey={openKey}>
         <AlertsSection cfg={settings} set={set}/>
       </Accordion>

@@ -371,6 +371,15 @@ input,select,textarea{font-family:var(--mono);font-size:14px;color:var(--text)}
 /* Settings tab — slightly wider to fit the gear icon */
 .bottom-tab-settings { min-width: 48px; flex: 0 0 48px; }
 
+/* Builder tab — glowing P */
+@keyframes pb-tab-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px #c6ff00aa); }
+  50%       { filter: drop-shadow(0 0 10px #c6ff00ff) drop-shadow(0 0 20px #c6ff0066); }
+}
+.bottom-tab-builder-active svg {
+  animation: pb-tab-glow 1.8s ease-in-out infinite;
+}
+
 .bottom-tab-label {
   font-size: 11px;
   font-weight: 700;

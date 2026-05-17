@@ -799,16 +799,16 @@ export default function App() {
             title="Patterns"
             style={{
               height:32, padding:'0 10px', borderRadius:8, flexShrink:0,
-              border: activeTab==='settings' ? '1.5px solid rgba(150,100,255,0.7)' : '1.5px solid rgba(150,100,255,0.35)',
-              background: activeTab==='settings' ? 'rgba(150,100,255,0.13)' : 'rgba(150,100,255,0.07)',
+              border: activeTab==='builder' ? '1.5px solid rgba(198,255,0,0.7)' : '1.5px solid rgba(198,255,0,0.35)',
+              background: activeTab==='builder' ? 'rgba(198,255,0,0.13)' : 'rgba(198,255,0,0.07)',
               display:'flex', alignItems:'center', gap:5,
               cursor:'pointer', transition:'all .15s',
-              color: activeTab==='settings' ? '#b388ff' : 'rgba(150,100,255,0.7)',
+              color: activeTab==='builder' ? '#c6ff00' : 'rgba(198,255,0,0.7)',
             }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(150,100,255,0.7)';e.currentTarget.style.color='#b388ff'}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(198,255,0,0.7)';e.currentTarget.style.color='#c6ff00'}}
             onMouseLeave={e=>{
-              e.currentTarget.style.borderColor=activeTab==='settings'?'rgba(150,100,255,0.7)':'rgba(150,100,255,0.35)'
-              e.currentTarget.style.color=activeTab==='settings'?'#b388ff':'rgba(150,100,255,0.7)'
+              e.currentTarget.style.borderColor=activeTab==='builder'?'rgba(198,255,0,0.7)':'rgba(198,255,0,0.35)'
+              e.currentTarget.style.color=activeTab==='builder'?'#c6ff00':'rgba(198,255,0,0.7)'
             }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -905,7 +905,7 @@ export default function App() {
           const isActive = activeTab === tab.id
           const count = (!tab.isSettings && !tab.isBuilder) ? (alertCounts[tab.id] || 0) : 0
           return (
-            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}`} onClick={() => navigateTo(tab.id)}
+            <button key={tab.id} className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`} onClick={() => navigateTo(tab.id)}
               style={{ color: isActive?tab.color:'var(--text3)',
                 background: isActive?`${tab.color}10`:'transparent',
                 borderTop: isActive?`2px solid ${tab.color}`:'2px solid transparent' }}>
@@ -916,8 +916,17 @@ export default function App() {
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
               ) : tab.isBuilder ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {isActive && (
+                    <filter id="pb-glow">
+                      <feGaussianBlur stdDeviation="2" result="blur"/>
+                      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                  )}
+                  <text x="2" y="20" fontFamily="Georgia,serif" fontSize="22" fontWeight="900"
+                    fill={isActive ? '#c6ff00' : 'currentColor'}
+                    filter={isActive ? 'url(#pb-glow)' : undefined}
+                    style={{ letterSpacing: '-1px' }}>P</text>
                 </svg>
               ) : (
                 <span className="bottom-tab-label">{tab.label}</span>
