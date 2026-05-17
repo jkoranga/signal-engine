@@ -74,12 +74,27 @@ function condColor(idx) { return COND_COLORS[idx % COND_COLORS.length] }
 
 // Mirror an operator (flip comparison direction)
 const MIRROR_OP = { '>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '≠': '≠' }
+
+// Flip High ↔ Low for bearish/bullish mirror (other fields stay same)
+const MIRROR_FIELD = { 'high': 'low', 'low': 'high' }
+
 function mirrorCond(cond) {
+  // Invert multiplier: × 1.005 → × (1/1.005) = × 0.995
+  const rhsMult = cond.rhsMult != null
+    ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
+    : cond.rhsMult
+
+  // Invert pct: +0.5% → -0.5%
+  const rhsPct = cond.rhsPct != null ? -parseFloat(cond.rhsPct) : cond.rhsPct
+
   return {
     ...cond,
     id: uid(),
     op: MIRROR_OP[cond.op] ?? cond.op,
-    label: cond.label ? `Mirror of ${cond.label}` : 'Mirrored condition',
+    lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
+    rhsMult,
+    rhsPct,
+    label: cond.label ? `Mirror of ${cond.label}` : '',
   }
 }
 
@@ -1000,12 +1015,7 @@ export default function PatternBuilderTab({ settings, update }) {
       id: `custom_${uid()}`,
       name: customName,
       side: src.side === 'bull' ? 'bear' : 'bull',
-      conditions: src.conditions.map(c => ({
-        ...c,
-        id: uid(),
-        op: MIRROR_OP[c.op] ?? c.op,
-        label: c.label ? `Mirror of ${c.label}` : '',
-      })),
+      conditions: src.conditions.map(c => mirrorCond(c)),
       createdAt: Date.now(),
     }
     const ps = [...patterns]
