@@ -127,6 +127,7 @@ function mirrorCond(cond) {
     id: uid(),
     op: MIRROR_OP[cond.op] ?? cond.op,
     lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
+    rhsField: MIRROR_FIELD[cond.rhsField] ?? cond.rhsField,
     rhsMult,
     rhsNum,
     rhsPct,
