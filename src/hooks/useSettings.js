@@ -143,9 +143,17 @@ export function useSettings(firebaseUser) {
           merged._deletedPatternsAt = localTrAt
         }
 
+        // Keep settingsRef in sync immediately — do NOT wait for the useEffect.
+        // update() reads settingsRef.current synchronously, so if any update()
+        // call happens before the next render, it must see the merged state,
+        // not the pre-login state.
+        settingsRef.current = merged
         return merged
       })
-      setCloudSynced(true)
+      // Push merged state back to Firestore immediately after every login.
+      // This corrects any stale cloud state (e.g. from old merge:true bugs)
+      // and ensures the cloud always reflects the authoritative merged result.
+      saveSettingsToCloud(uid, settingsRef.current).then(() => setCloudSynced(true))
     })
   }, [firebaseUser, saveNow])
 
