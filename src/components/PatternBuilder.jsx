@@ -541,13 +541,28 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '7px 9px', background: 'rgba(0,0,0,0.2)',
       }}>
-        {/* Enable dot */}
-        <div onClick={() => s('enabled', !cond.enabled)} style={{
-          width: 11, height: 11, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
-          background: cond.enabled ? color : 'var(--border)',
-          boxShadow: cond.enabled ? `0 0 7px ${color}` : 'none',
-          transition: 'all .15s',
-        }} />
+        {/* Enable / Disable toggle button */}
+        <button
+          onClick={() => s('enabled', !cond.enabled)}
+          title={cond.enabled ? 'Disable condition' : 'Enable condition'}
+          style={{
+            height: 20, padding: '0 7px', borderRadius: 5, cursor: 'pointer', flexShrink: 0,
+            border: `1.5px solid ${cond.enabled ? color + '80' : 'var(--border)'}`,
+            background: cond.enabled ? `${color}20` : 'var(--bg3)',
+            color: cond.enabled ? color : 'var(--text3)',
+            fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
+            letterSpacing: '.04em', transition: 'all .15s',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <div style={{
+            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+            background: cond.enabled ? color : 'var(--border)',
+            boxShadow: cond.enabled ? `0 0 5px ${color}` : 'none',
+            transition: 'all .15s',
+          }} />
+          {cond.enabled ? 'ON' : 'OFF'}
+        </button>
 
         {/* Formula — tap to expand */}
         <div onClick={onToggleOpen} style={{
