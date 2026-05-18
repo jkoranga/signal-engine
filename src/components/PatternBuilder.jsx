@@ -161,8 +161,9 @@ export function condFormula(c) {
     const modeLabel = c.rangeMode === 'any' ? 'ANY' : 'ALL'
     const windowLabel = `${modeLabel}[${from}→${to}]`
     const rhsF = FIELD_MAP[c.rhsField]?.short || (c.rhsField || '?')
+    const pinnedO = c.rhsPinned && (c.rhsPinnedOffset ?? 0) !== 0 ? `[${c.rhsPinnedOffset}]` : c.rhsPinned ? '[0]' : ''
+    const rhs = c.rhsPinned ? `${rhsF}${pinnedO}` : rhsF
     if (c.rhsMode === 'number')  return `${windowLabel} ${lhsF} ${op} ${c.rhsNum ?? 0}`
-    const rhs = rhsF
     if (c.rhsMode === 'field')   return `${windowLabel} ${lhsF} ${op} ${rhs}`
     if (c.rhsMode === 'mult')    return `${windowLabel} ${lhsF} ${op} ${rhs} × ${c.rhsMult ?? 1}`
     if (c.rhsMode === 'pct') {
@@ -175,7 +176,6 @@ export function condFormula(c) {
       const sk = c.slopeSkip ?? 0
       const thresh = c.slopeNum ?? 0
       const s = thresh >= 0 ? '+' : ''
-      const from = sk > 0 ? `[-${sk}]` : '[0]'
       return `${windowLabel} Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
     }
     return `${windowLabel} ${lhsF} ${op} ?`
@@ -307,9 +307,10 @@ export function compilePattern(pattern) {
             results.push(r)
             continue
           } else {
-            // RHS field is evaluated at the SAME offset as LHS (so each candle vs its own indicator)
-            const rhsAbsIdx = len - 1 + off + (cond.rhsOffset ?? 0)
-            const rhsCandle = getC(off + (cond.rhsOffset ?? 0))
+            // RHS field: if pinned, use fixed offset; otherwise walks with LHS
+            const rhsOff = cond.rhsPinned ? (cond.rhsPinnedOffset ?? 0) : off + (cond.rhsOffset ?? 0)
+            const rhsAbsIdx = len - 1 + rhsOff
+            const rhsCandle = getC(rhsOff)
             const rhsBase = getVal(rhsCandle, cond.rhsField || cond.lhsField, rhsAbsIdx)
             if (rhsBase == null) continue
             if (cond.rhsMode === 'field')   rhsV = rhsBase
@@ -724,6 +725,57 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
             <div style={{ fontSize: 9, fontFamily:'var(--mono)', color:'var(--text3)', marginBottom: 8, opacity:.75 }}>
               {RHS_MODES.find(m => m.id === cond.rhsMode)?.hint}
             </div>
+
+            {/* PIN RHS OFFSET — only shown in range check mode, for field-based RHS */}
+            {cond.rangeCheck && !['number','slope'].includes(cond.rhsMode) && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '7px 10px', borderRadius: 8, marginBottom: 8,
+                background: cond.rhsPinned ? `${color}14` : 'rgba(0,0,0,0.12)',
+                border: `1px solid ${cond.rhsPinned ? color + '40' : 'var(--border)'}`,
+                transition: 'all .15s',
+              }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: cond.rhsPinned ? color : 'var(--text2)' }}>
+                    Pin RHS to fixed candle
+                  </div>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 1 }}>
+                    {cond.rhsPinned
+                      ? `RHS fixed at [${cond.rhsPinnedOffset ?? 0}] — not walking with range`
+                      : 'RHS walks with range (each candle vs its own field)'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {cond.rhsPinned && (
+                    <select
+                      value={cond.rhsPinnedOffset ?? 0}
+                      onChange={e => s('rhsPinnedOffset', parseInt(e.target.value))}
+                      style={{
+                        background: 'var(--bg3)', border: `1.5px solid ${color}50`,
+                        color, borderRadius: 7, padding: '4px 7px',
+                        fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
+                      }}
+                    >
+                      {OFFSETS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+                    </select>
+                  )}
+                  <div onClick={() => s('rhsPinned', !cond.rhsPinned)} style={{
+                    width: 38, height: 22, borderRadius: 11, cursor: 'pointer', flexShrink: 0,
+                    background: cond.rhsPinned ? color : 'var(--bg3)',
+                    border: `1.5px solid ${cond.rhsPinned ? color : 'var(--border)'}`,
+                    position: 'relative', transition: 'all .2s',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2,
+                      left: cond.rhsPinned ? 18 : 2,
+                      width: 14, height: 14, borderRadius: '50%',
+                      background: '#fff', transition: 'left .2s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                    }} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Value inputs per mode */}
             {cond.rhsMode === 'number' && (
