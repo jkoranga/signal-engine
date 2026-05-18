@@ -1071,7 +1071,7 @@ export default function App() {
           <ErrorBoundary>
             <SettingsTab settings={settings} set={set} update={update} reset={reset}
               user={user} onUserChange={setUser} cloudSynced={cloudSynced}
-              cloudSaving={cloudSaving} onSaveNow={saveNow} openCount={settingsOpenCount} />
+              cloudSaving={cloudSaving} onSaveNow={saveNow} saveNowWithPatch={saveNowWithPatch} openCount={settingsOpenCount} />
           </ErrorBoundary>
         )}
         {activeTab === 'builder' && (

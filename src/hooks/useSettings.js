@@ -42,8 +42,20 @@ export const DEFAULTS = {
 
 // Fields that must be saved to cloud immediately (no debounce)
 const CRITICAL_KEYS = new Set([
-  'customPatterns', 'deletedPatterns', 'scannerEnabled', 'patternTfs',
+  // Pattern data
+  'customPatterns', 'deletedPatterns',
   '_customPatternsAt', '_deletedPatternsAt',
+  // Scanner toggles & TF assignments
+  'scannerEnabled', 'patternTfs',
+  // Scan settings (Settings tab)
+  'symbolSet', 'scanInterval', 'dedupInterval', 'volumeFilter',
+  'resultFilter', 'scanMode', 'patternsMode',
+  // Alert / notification settings
+  'soundEnabled', 'tgOn', 'tgToken', 'tgChatId',
+  // Appearance
+  'darkMode',
+  // Signal strength
+  'wickEnabled', 'wickTouchPct', 'scoreFilterEnabled', 'scoreMin',
 ])
 
 function hasCriticalKey(patch) {

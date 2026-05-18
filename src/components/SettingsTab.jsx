@@ -242,8 +242,11 @@ function ScannerDefCard({ scanner, expanded, onTap, enabled, onToggle, selectedT
 }
 
 // ── Scan Settings section ─────────────────────────────────
-function ScanSettingsSection({ settings, update }) {
-  function set(key, val) { update({ [key]: val }) }
+function ScanSettingsSection({ settings, update, saveNowWithPatch }) {
+  function set(key, val) {
+    update({ [key]: val })
+    saveNowWithPatch?.({ [key]: val })
+  }
 
   const DEDUP_OPTIONS = [['1m','1m'],['3m','3m'],['5m','5m'],['15m','15m'],['30m','30m'],['1h','1h'],['4h','4h'],['1d','Daily']]
   const VOLUME_FILTERS = [
@@ -329,7 +332,7 @@ function ScanSettingsSection({ settings, update }) {
 
 // ── Pattern Manager ───────────────────────────────────────
 // Each pattern shows: enabled toggle + inline TF chip selector + conditions
-function PatternManager({ settings, update }) {
+function PatternManager({ settings, update, saveNowWithPatch }) {
   const [expanded, setExpanded] = useState({})
   const [sideFilter, setSideFilter] = useState('all')
   const [tfFilter, setTfFilter] = useState('all') // filter list by TF
@@ -356,19 +359,25 @@ function PatternManager({ settings, update }) {
   }, [settings.patternTfs])
 
   function setEnabled(id, val) {
-    update({ scannerEnabled: { ...scannerEnabled, [id]: val } })
+    const next = { ...scannerEnabled, [id]: val }
+    update({ scannerEnabled: next })
+    saveNowWithPatch?.({ scannerEnabled: next })
   }
 
   function setPatternTfs(id, tfs) {
     // Allow empty array — user can fully uncheck all TFs
-    update({ patternTfs: { ...(settings.patternTfs || {}), [id]: tfs } })
+    const next = { ...(settings.patternTfs || {}), [id]: tfs }
+    update({ patternTfs: next })
+    saveNowWithPatch?.({ patternTfs: next })
   }
 
   // ── Bulk TF actions ────────────────────────────────────
   function bulkSetTfs(tfs) {
     const patch = {}
     ALL_SCANNERS.forEach(s => { patch[s.id] = tfs })
-    update({ patternTfs: { ...(settings.patternTfs || {}), ...patch } })
+    const next = { ...(settings.patternTfs || {}), ...patch }
+    update({ patternTfs: next })
+    saveNowWithPatch?.({ patternTfs: next })
   }
 
   // ── Visible scanners ───────────────────────────────────
@@ -420,12 +429,12 @@ function PatternManager({ settings, update }) {
         <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
           {/* Enable/disable bulk */}
           <button className="btn-small"
-            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=true); update({ scannerEnabled: n }) }}
+            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=true); update({ scannerEnabled: n }); saveNowWithPatch?.({ scannerEnabled: n }) }}
             style={{background:'rgba(0,230,118,0.12)',borderColor:'rgba(0,192,96,0.5)',color:'var(--green)',fontWeight:700}}>
             ✓ All On
           </button>
           <button className="btn-small"
-            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=false); update({ scannerEnabled: n }) }}
+            onClick={() => { const n={}; ALL_SCANNERS.forEach(s=>n[s.id]=false); update({ scannerEnabled: n }); saveNowWithPatch?.({ scannerEnabled: n }) }}
             style={{background:'rgba(255,70,70,0.08)',borderColor:'rgba(255,70,70,0.35)',color:'var(--red)',fontWeight:700}}>
             ✗ All Off
           </button>
@@ -523,7 +532,7 @@ function PatternManager({ settings, update }) {
 }
 
 // ── Main SettingsTab ──────────────────────────────────────
-export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, openCount=0 }) {
+export default function SettingsTab({ settings, set, update, reset, user, onUserChange, cloudSynced, cloudSaving, onSaveNow, saveNowWithPatch, openCount=0 }) {
   const [resetMsg, setResetMsg] = React.useState('')
   const [resetConfirm, setResetConfirm] = React.useState(false)
   const openKey = openCount
@@ -555,7 +564,7 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
       </Accordion>
 
       <Accordion title="Scan Settings" icon="⬡" badge="GLOBAL" defaultOpen={false} accentColor="var(--accent)" openKey={openKey}>
-        <ScanSettingsSection settings={settings} update={update}/>
+        <ScanSettingsSection settings={settings} update={update} saveNowWithPatch={saveNowWithPatch}/>
       </Accordion>
 
       <Accordion title="Alerts & Notifications" icon="◈" defaultOpen={false} accentColor="rgba(255,167,38,0.5)" openKey={openKey}>
