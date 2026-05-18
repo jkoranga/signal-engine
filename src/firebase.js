@@ -70,7 +70,11 @@ export async function saveSettingsToCloud(uid, settings) {
   if (!uid) return false
   try {
     const ref = doc(db, 'users', uid, 'settings', 'ema-sigma')
-    await setDoc(ref, { ...settings, _savedAt: Date.now() }, { merge: true })
+    // Full overwrite — no merge. We always save the complete settings object,
+    // so merge:true is unnecessary and harmful: Firestore merge:true can fail
+    // to overwrite arrays when the new value is [] (empty), causing stale trash
+    // to reappear after restore on re-login.
+    await setDoc(ref, { ...settings, _savedAt: Date.now() })
     return true
   } catch (e) {
     console.warn('[Signal Engine] saveSettings failed:', e.message)

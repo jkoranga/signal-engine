@@ -35,6 +35,9 @@ export const DEFAULTS = {
   wickTouchPct:  1.5,
   scoreFilterEnabled: false,
   scoreMin:           5,
+  // Pattern lists — always present so Firestore full-overwrites never miss them
+  customPatterns:  [],
+  deletedPatterns: [],
   // Timestamps: track when critical fields were last saved locally
   _customPatternsAt:  0,
   _deletedPatternsAt: 0,
