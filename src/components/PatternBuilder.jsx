@@ -1,5 +1,5 @@
 // ─── Pattern Builder v3 ───────────────────────────────────────────────────────
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 
 // ── Field catalogue ───────────────────────────────────────────────────────────
 const FIELDS = [
@@ -987,6 +987,9 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   const [mirrorName, setMirrorName] = useState('')
   const [mirrorNameAlert, setMirrorNameAlert] = useState('')
   const mirrorInputRef = React.useRef(null)
+  const mirroredDefaultName = pattern.side === 'bull'
+    ? pattern.name.replace(/bull/gi, 'Bear').replace(/buy/gi, 'Sell').replace(/long/gi, 'Short') || `${pattern.name} Mirror`
+    : pattern.name.replace(/bear/gi, 'Bull').replace(/sell/gi, 'Buy').replace(/short/gi, 'Long') || `${pattern.name} Mirror`
   const color = pattern.side === 'bull' ? G : R
   const nameRef = React.useRef(null)
 
@@ -1003,7 +1006,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
 
   React.useEffect(() => {
     if (mirrorPopup) {
-      setMirrorName(pattern.name)
+      setMirrorName(mirroredDefaultName)
       setTimeout(() => { mirrorInputRef.current?.focus(); mirrorInputRef.current?.select() }, 60)
     }
   }, [mirrorPopup])
@@ -1014,8 +1017,9 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
       setMirrorNameAlert('Please enter a name.')
       return
     }
+    // Popup only appears when original mirrored name conflicts — still block if new name also conflicts
     if ((allPatternNames || []).some(n => n.toLowerCase() === name.toLowerCase())) {
-      setMirrorNameAlert('A pattern with this name already exists.')
+      setMirrorNameAlert('This name is already taken. Please choose a different name.')
       return
     }
     onMirrorPattern(name)
@@ -1069,8 +1073,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
               </div>
             </div>
             <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
-              Creates a new {mirroredSide === 'bull' ? '🟢 Bull' : '🔴 Bear'} pattern with all operators flipped.
-              Give it a name before saving.
+              The name <b style={{color:'var(--red)'}}>already exists</b>. Choose a different name for the new {mirroredSide === 'bull' ? '🟢 Bull' : '🔴 Bear'} mirror pattern.
             </div>
             <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', fontWeight: 700,
               letterSpacing: '.07em', marginBottom: 6 }}>NAME</div>
@@ -1154,7 +1157,15 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
               width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
-          <button onClick={() => setMirrorPopup(true)} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
+          <button onClick={() => {
+            // If mirrored name is free, mirror immediately with no popup
+            const names = (allPatternNames || []).map(n => n.toLowerCase())
+            if (!names.includes(mirroredDefaultName.toLowerCase())) {
+              onMirrorPattern(mirroredDefaultName)
+            } else {
+              setMirrorPopup(true)
+            }
+          }} title="Create mirrored pattern (flips Bull↔Bear + all operators)" style={{
             width: 28, height: 28, borderRadius: 7,
             border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
             color: BLU, cursor: 'pointer', fontSize: 15,
@@ -1294,38 +1305,72 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
-export default function PatternBuilderTab({ settings, update, saveNowWithPatch }) {
+export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
   const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
 
+  // Keep a ref to patterns so debounced save always uses the latest version
+  const patternsRef = useRef(patterns)
+  patternsRef.current = patterns
+
+  // Debounce timer for text-field edits (name, condition values)
+  // Single atomic save for patterns + trash together — one Firebase write
+  function saveBoth(ps, ts) {
+    const now = Date.now()
+    update({
+      customPatterns:    ps,
+      deletedPatterns:   ts,
+      _customPatternsAt:  now,
+      _deletedPatternsAt: now,
+    })
+  }
+
+  // Immediate save — used for structural changes (add, delete, toggle, mirror, restore)
   function savePatterns(ps) {
     const now = Date.now()
     update({ customPatterns: ps, _customPatternsAt: now })
-    saveNowWithPatch?.({ customPatterns: ps, _customPatternsAt: now })
   }
+
   function saveTrash(ts) {
     const now = Date.now()
     update({ deletedPatterns: ts, _deletedPatternsAt: now })
-    saveNowWithPatch?.({ deletedPatterns: ts, _deletedPatternsAt: now })
   }
 
   function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
-  function upd(i, p) { const ps = [...patterns]; ps[i] = p; savePatterns(ps) }
+
+  // upd() is called on every keystroke (name input, condition values).
+  // Each call saves the full updated pattern list to state + Firebase immediately.
+  // Firebase writes are fast and idempotent — last write wins, no data corruption.
+  function upd(i, p) {
+    const ps = [...patternsRef.current]
+    ps[i] = p
+    savePatterns(ps)
+  }
 
   function del(i) {
-    const removed = { ...patterns[i], deletedAt: Date.now() }
+    // Atomic: remove from patterns AND add to trash in one update() call
+    const removed  = { ...patterns[i], deletedAt: Date.now() }
     const newTrash = [removed, ...trash].slice(0, 50)
-    savePatterns(patterns.filter((_, j) => j !== i))
-    saveTrash(newTrash)
+    const newPats  = patterns.filter((_, j) => j !== i)
+    saveBoth(newPats, newTrash)
   }
 
   function restore(i) {
-    const p = { ...trash[i], deletedAt: undefined }
-    setNewId(p.id)
-    savePatterns([...patterns, p])
-    saveTrash(trash.filter((_, j) => j !== i))
+    // If name already exists in active patterns, generate a unique name
+    let p = { ...trash[i], deletedAt: undefined }
+    const existingNames = patterns.map(x => x.name.toLowerCase())
+    if (existingNames.includes(p.name.toLowerCase())) {
+      // Find a free name: "Name (2)", "Name (3)", etc.
+      let n = 2
+      while (existingNames.includes(`${p.name} (${n})`.toLowerCase())) n++
+      p = { ...p, name: `${p.name} (${n})` }
+    }
+    const newPats = [...patterns, p]
+    const newTrsh = trash.filter((_, j) => j !== i)
+    // Restore immediately — no rename prompt, just save
+    saveBoth(newPats, newTrsh)
   }
 
   function purgeOne(i) {
@@ -1348,7 +1393,7 @@ export default function PatternBuilderTab({ settings, update, saveNowWithPatch }
     }
     const ps = [...patterns]
     ps.splice(i + 1, 0, mirrored)
-    setNewId(null)   // don't auto-open — stay at pattern list home
+    setNewId(null)
     savePatterns(ps)
   }
 

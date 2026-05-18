@@ -84,14 +84,27 @@ export function useSettings(firebaseUser) {
   const [cloudSaving, setCloudSaving] = useState(false)
   const saveTimeoutRef = useRef(null)
   const prevUidRef = useRef(null)
-  // Latest settings ref — always current even inside async callbacks
-  const settingsRef = useRef(settings)
-  useEffect(() => { settingsRef.current = settings }, [settings])
+  // Always holds the latest settings — readable synchronously in callbacks
+  const settingsRef = useRef(loaded.settings)
 
-  // Persist to localStorage on every change
+  // Keep settingsRef in sync AND persist to localStorage on every state change
   useEffect(() => {
+    settingsRef.current = settings
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)) } catch {}
   }, [settings])
+
+  // ── Direct cloud save (no debounce) ───────────────────────
+  const saveNow = useCallback(async (overrideSettings) => {
+    const uid = firebaseUser?.uid
+    if (!uid) return false
+    clearTimeout(saveTimeoutRef.current)
+    const toSave = overrideSettings ?? settingsRef.current
+    setCloudSaving(true)
+    const ok = await saveSettingsToCloud(uid, toSave)
+    if (ok) setCloudSynced(true)
+    setCloudSaving(false)
+    return ok
+  }, [firebaseUser])
 
   // ── Cloud load on login ────────────────────────────────────
   useEffect(() => {
@@ -102,96 +115,96 @@ export function useSettings(firebaseUser) {
 
     loadSettingsFromCloud(uid).then(cloud => {
       if (!cloud) {
-        // No cloud data yet — push local settings to cloud immediately
-        saveSettingsToCloud(uid, settingsRef.current)
-        setCloudSynced(true)
+        // First time user — push whatever is in local storage up to cloud
+        saveNow()
         return
       }
       const { _savedAt, ...clean } = cloud
       setSettings(prev => {
         const merged = { ...prev, ...clean }
 
-        // For customPatterns: keep whichever is STRICTLY newer.
-        // If equal (both 0 = first time), cloud wins so we load saved data.
-        const localPatternsAt = prev._customPatternsAt  || 0
-        const cloudPatternsAt = clean._customPatternsAt || 0
-        if (localPatternsAt > cloudPatternsAt) {
+        // customPatterns: keep strictly newer side (by timestamp).
+        // Both 0 means neither was ever explicitly saved — cloud wins (it has data).
+        const localAt = prev._customPatternsAt  || 0
+        const cloudAt = clean._customPatternsAt || 0
+        if (localAt > cloudAt) {
           merged.customPatterns    = prev.customPatterns
-          merged._customPatternsAt = prev._customPatternsAt
+          merged._customPatternsAt = localAt
         }
 
-        // Same for deleted/trash patterns
-        const localTrashAt = prev._deletedPatternsAt  || 0
-        const cloudTrashAt = clean._deletedPatternsAt || 0
-        if (localTrashAt > cloudTrashAt) {
+        // Same for trash
+        const localTrAt = prev._deletedPatternsAt  || 0
+        const cloudTrAt = clean._deletedPatternsAt || 0
+        if (localTrAt > cloudTrAt) {
           merged.deletedPatterns    = prev.deletedPatterns
-          merged._deletedPatternsAt = prev._deletedPatternsAt
+          merged._deletedPatternsAt = localTrAt
         }
 
         return merged
       })
       setCloudSynced(true)
     })
-  }, [firebaseUser])
+  }, [firebaseUser, saveNow])
 
   useEffect(() => {
     if (!firebaseUser) { prevUidRef.current = null; setCloudSynced(false) }
   }, [firebaseUser])
 
-  // ── Immediate cloud save helper ────────────────────────────
-  const saveToCloud = useCallback(async (settingsToSave) => {
-    const uid = firebaseUser?.uid
-    if (!uid) return false
-    setCloudSaving(true)
-    const ok = await saveSettingsToCloud(uid, settingsToSave)
-    if (ok) setCloudSynced(true)
-    setCloudSaving(false)
-    return ok
-  }, [firebaseUser])
-
-  // ── update(): save critical fields immediately, debounce the rest ──
+  // ── update(): the single entry point for all setting changes ──
+  // For critical keys (patterns, scanners, etc.) — saves to Firebase immediately.
+  // For non-critical — debounces 2 seconds.
   const update = useCallback((patch) => {
-    setSettings(prev => {
-      const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
-      // Fire immediate cloud save for critical fields
-      const uid = firebaseUser?.uid
-      if (uid && hasCriticalKey(typeof patch === 'function' ? next : patch)) {
-        clearTimeout(saveTimeoutRef.current)
-        setCloudSaving(true)
-        saveSettingsToCloud(uid, next).then(ok => {
+    // Compute next state
+    const next = typeof patch === 'function'
+      ? patch(settingsRef.current)
+      : { ...settingsRef.current, ...patch }
+
+    // Update ref immediately so subsequent calls in the same tick see latest state
+    settingsRef.current = next
+
+    // Update React state (triggers re-render + localStorage persist via useEffect)
+    setSettings(next)
+
+    // Cloud save
+    const uid = firebaseUser?.uid
+    if (!uid) return
+
+    const isCritical = typeof patch === 'function'
+      ? true  // function patches always treated as critical (e.g. complex updates)
+      : hasCriticalKey(patch)
+
+    if (isCritical) {
+      clearTimeout(saveTimeoutRef.current)
+      setCloudSaving(true)
+      saveSettingsToCloud(uid, next).then(ok => {
+        if (ok) setCloudSynced(true)
+        setCloudSaving(false)
+      })
+    } else {
+      clearTimeout(saveTimeoutRef.current)
+      setCloudSaving(true)
+      saveTimeoutRef.current = setTimeout(() => {
+        saveSettingsToCloud(uid, settingsRef.current).then(ok => {
           if (ok) setCloudSynced(true)
           setCloudSaving(false)
         })
-      } else if (uid) {
-        // Debounce non-critical changes
-        clearTimeout(saveTimeoutRef.current)
-        setCloudSaving(true)
-        saveTimeoutRef.current = setTimeout(async () => {
-          const ok = await saveSettingsToCloud(uid, settingsRef.current)
-          if (ok) setCloudSynced(true)
-          setCloudSaving(false)
-        }, 2000)
-      }
-      return next
-    })
-  }, [firebaseUser, saveToCloud])
+      }, 2000)
+    }
+  }, [firebaseUser])
 
-  const saveNow = useCallback(async () => {
-    const uid = firebaseUser?.uid
-    if (!uid) return false
-    clearTimeout(saveTimeoutRef.current)
-    return saveToCloud(settingsRef.current)
-  }, [firebaseUser, saveToCloud])
-
-  // Save immediately with a patch merged in — use when you need to save
-  // right after update() before React has flushed the new state
+  // saveNowWithPatch — kept for API compatibility, merges patch and saves immediately
   const saveNowWithPatch = useCallback(async (patch) => {
     const uid = firebaseUser?.uid
     if (!uid) return false
     clearTimeout(saveTimeoutRef.current)
     const merged = { ...settingsRef.current, ...patch }
-    return saveToCloud(merged)
-  }, [firebaseUser, saveToCloud])
+    settingsRef.current = merged
+    setCloudSaving(true)
+    const ok = await saveSettingsToCloud(uid, merged)
+    if (ok) setCloudSynced(true)
+    setCloudSaving(false)
+    return ok
+  }, [firebaseUser])
 
   const updateNested = useCallback((key, patch) => {
     update(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
@@ -199,6 +212,7 @@ export function useSettings(firebaseUser) {
 
   const reset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
+    settingsRef.current = DEFAULTS
     setSettings(DEFAULTS)
   }, [])
 
