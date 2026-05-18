@@ -1155,7 +1155,7 @@ export const ADVANCED_SCANNERS = [
 ]
 
 // Combined for convenience
-export const ALL_SCANNERS = [...SCANNERS, ...ADVANCED_SCANNERS]
+export const ALL_SCANNERS = []
 
 // ── TF metadata — add new TFs here once, tabs auto-appear ─────────────────────
 export const TF_ORDER = ['1m','3m','5m','15m','30m','1h','2h','4h','6h','12h','1d']
