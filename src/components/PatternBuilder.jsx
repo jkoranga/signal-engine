@@ -1304,6 +1304,49 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   )
 }
 
+// ── Hints accordion ───────────────────────────────────────────────────────────
+function HintsAccordion() {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <div style={{
+      marginBottom: 12, borderRadius: 9,
+      border: `1px solid ${open ? 'rgba(179,136,255,0.38)' : 'rgba(179,136,255,0.18)'}`,
+      background: open ? 'rgba(179,136,255,0.07)' : 'rgba(179,136,255,0.03)',
+      overflow: 'hidden', transition: 'border-color .18s, background .18s',
+    }}>
+      {/* Toggle row */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <span style={{ fontSize: 13 }}>💡</span>
+        <span style={{ flex: 1, fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 10,
+          letterSpacing: '.07em', color: A, textAlign: 'left' }}>QUICK REFERENCE</span>
+        <span style={{ fontSize: 10, color: A, opacity: .7, transition: 'transform .18s',
+          display: 'inline-block', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+      </button>
+      {/* Content */}
+      {open && (
+        <div style={{
+          padding: '2px 12px 11px', borderTop: '1px solid rgba(179,136,255,0.15)',
+          fontSize: 10, fontFamily: 'var(--mono)', color: A, lineHeight: 1.85,
+        }}>
+          <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
+          <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
+          <b>% Diff</b>: how many % LHS is above/below RHS<br/>
+          <b>Slope %</b>: how much field rose over N candles &nbsp;·&nbsp; bullish = op &gt; 0 &nbsp;·&nbsp; bearish = op &lt; 0<br/>
+          <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
+          <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
+          Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main tab ──────────────────────────────────────────────────────────────────
 export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
@@ -1419,20 +1462,8 @@ export default function PatternBuilderTab({ settings, update }) {
         </div>
       </div>
 
-      {/* Quick reference */}
-      <div style={{
-        marginBottom: 12, padding: '9px 12px', borderRadius: 9,
-        background: 'rgba(179,136,255,0.07)', border: '1px solid rgba(179,136,255,0.22)',
-        fontSize: 10, fontFamily: 'var(--mono)', color: A, lineHeight: 1.75,
-      }}>
-        <b>× Mult</b>: EMA20[0] &gt; EMA20[-2] × 1.5 &nbsp;·&nbsp;
-        <b>± %</b>: EMA20[0] &gt; EMA20[-2] + 0.35% &nbsp;·&nbsp;
-        <b>% Diff</b>: how many % LHS is above/below RHS<br/>
-        <b>Slope %</b>: how much field rose over N candles &nbsp;·&nbsp; bullish = op &gt; 0 &nbsp;·&nbsp; bearish = op &lt; 0<br/>
-        <b>Change%</b>: candle-to-candle % &nbsp;·&nbsp; <b>24h%</b>: Binance 24h change<br/>
-        <b>DMI/ADX</b>: +DI &gt; -DI = bullish &nbsp;·&nbsp; ADX &gt; 25 = strong trend<br/>
-        Tap <b style={{color: BLU}}>AND</b>/<b style={{color:AMB}}>OR</b> badge between conditions to switch logic · <b>⧉</b> copies a condition
-      </div>
+      {/* Quick reference — collapsible hints accordion */}
+      <HintsAccordion />
 
       {/* List — "My Patterns" section */}
       {patterns.length === 0 ? (
