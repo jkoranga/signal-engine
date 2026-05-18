@@ -109,6 +109,35 @@ export function useSettings(firebaseUser) {
     return ok
   }, [firebaseUser])
 
+  // ── Shared helper: merge cloud snapshot into local state ──────────────────
+  // Returns the merged object (does NOT call setSettings — caller does that).
+  // Rule: cloud wins unless local timestamp is STRICTLY newer.
+  // We do NOT push the merged result back to Firestore here; callers decide
+  // whether to do that (login does, tab-focus does not — to avoid a write
+  // storm when many tabs are open).
+  const mergeCloud = useCallback((prev, cloud) => {
+    const { _savedAt, ...clean } = cloud
+    const merged = { ...prev, ...clean }
+
+    // customPatterns: keep local only when it is strictly newer.
+    const localAt = prev._customPatternsAt  || 0
+    const cloudAt = clean._customPatternsAt || 0
+    if (localAt > cloudAt) {
+      merged.customPatterns    = prev.customPatterns
+      merged._customPatternsAt = localAt
+    }
+
+    // Same for trash
+    const localTrAt = prev._deletedPatternsAt  || 0
+    const cloudTrAt = clean._deletedPatternsAt || 0
+    if (localTrAt > cloudTrAt) {
+      merged.deletedPatterns    = prev.deletedPatterns
+      merged._deletedPatternsAt = localTrAt
+    }
+
+    return merged
+  }, [])
+
   // ── Cloud load on login ────────────────────────────────────
   useEffect(() => {
     const uid = firebaseUser?.uid
@@ -122,40 +151,50 @@ export function useSettings(firebaseUser) {
         saveNow()
         return
       }
-      const { _savedAt, ...clean } = cloud
       setSettings(prev => {
-        const merged = { ...prev, ...clean }
-
-        // customPatterns: keep strictly newer side (by timestamp).
-        // Both 0 means neither was ever explicitly saved — cloud wins (it has data).
-        const localAt = prev._customPatternsAt  || 0
-        const cloudAt = clean._customPatternsAt || 0
-        if (localAt > cloudAt) {
-          merged.customPatterns    = prev.customPatterns
-          merged._customPatternsAt = localAt
-        }
-
-        // Same for trash
-        const localTrAt = prev._deletedPatternsAt  || 0
-        const cloudTrAt = clean._deletedPatternsAt || 0
-        if (localTrAt > cloudTrAt) {
-          merged.deletedPatterns    = prev.deletedPatterns
-          merged._deletedPatternsAt = localTrAt
-        }
-
+        const merged = mergeCloud(prev, cloud)
         // Keep settingsRef in sync immediately — do NOT wait for the useEffect.
-        // update() reads settingsRef.current synchronously, so if any update()
-        // call happens before the next render, it must see the merged state,
-        // not the pre-login state.
         settingsRef.current = merged
         return merged
       })
-      // Push merged state back to Firestore immediately after every login.
-      // This corrects any stale cloud state (e.g. from old merge:true bugs)
-      // and ensures the cloud always reflects the authoritative merged result.
+      // Push merged state back to Firestore immediately after login.
+      // This corrects any stale cloud state and ensures the cloud always
+      // reflects the authoritative merged result.
       saveSettingsToCloud(uid, settingsRef.current).then(() => setCloudSynced(true))
     })
-  }, [firebaseUser, saveNow])
+  }, [firebaseUser, saveNow, mergeCloud])
+
+  // ── Re-sync from cloud when tab becomes visible ────────────
+  // This is the key fix for cross-browser sync: when Chrome regains focus
+  // after changes were made in Brave (or any other browser/tab), we silently
+  // pull the latest cloud state. If cloud is newer, it wins automatically
+  // via mergeCloud's timestamp logic. We do NOT push back to Firestore here
+  // (no write storm), and we do NOT show a loading spinner — it's invisible.
+  useEffect(() => {
+    const uid = firebaseUser?.uid
+    if (!uid) return
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return
+      loadSettingsFromCloud(uid).then(cloud => {
+        if (!cloud) return
+        setSettings(prev => {
+          const merged = mergeCloud(prev, cloud)
+          // Only trigger a re-render if something actually changed
+          const changed =
+            merged.customPatterns    !== prev.customPatterns ||
+            merged.deletedPatterns   !== prev.deletedPatterns ||
+            merged._customPatternsAt !== prev._customPatternsAt
+          if (!changed) return prev
+          settingsRef.current = merged
+          return merged
+        })
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [firebaseUser, mergeCloud])
 
   useEffect(() => {
     if (!firebaseUser) { prevUidRef.current = null; setCloudSynced(false) }
