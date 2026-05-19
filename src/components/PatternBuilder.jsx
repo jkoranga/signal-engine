@@ -1519,6 +1519,8 @@ export default function PatternBuilderTab({ settings, update }) {
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
   const [confirmPurgeId, setConfirmPurgeId] = useState(null)
+  const [confirmPurgeAll, setConfirmPurgeAll] = useState(false)
+  const [purgeAllChecked, setPurgeAllChecked] = useState(false)
 
   // Keep a ref to patterns so debounced save always uses the latest version
   const patternsRef = useRef(patterns)
@@ -1731,9 +1733,96 @@ export default function PatternBuilderTab({ settings, update }) {
               </div>
             ) : (
               <>
-                {/* Purge all */}
+                {/* Purge all warning modal */}
+                {confirmPurgeAll && (
+                  <>
+                    <div onClick={() => { setConfirmPurgeAll(false); setPurgeAllChecked(false) }} style={{
+                      position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.65)',
+                      backdropFilter: 'blur(3px)',
+                    }} />
+                    <div style={{
+                      position: 'fixed', left: '50%', top: '50%',
+                      transform: 'translate(-50%,-50%)',
+                      zIndex: 200, width: 'min(320px, 90vw)',
+                      borderRadius: 16, padding: '22px 18px',
+                      background: 'var(--bg1)',
+                      border: '1.5px solid rgba(255,60,60,0.45)',
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,60,60,0.1)',
+                    }}>
+                      {/* Icon + title */}
+                      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                        <div style={{ fontSize: 36, marginBottom: 8 }}>⚠️</div>
+                        <div style={{ fontWeight: 900, fontSize: 16, color: 'var(--red)', letterSpacing: '-.01em' }}>
+                          Delete All Permanently?
+                        </div>
+                        <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 5, lineHeight: 1.6 }}>
+                          This will permanently delete all <b style={{ color: AMB }}>{trash.length} pattern{trash.length !== 1 ? 's' : ''}</b> from the trash bin.<br/>
+                          <b style={{ color: 'var(--red)' }}>This action cannot be undone.</b>
+                        </div>
+                      </div>
+
+                      {/* Divider */}
+                      <div style={{ height: 1, background: 'rgba(255,60,60,0.15)', marginBottom: 14 }} />
+
+                      {/* Dual checkbox confirm */}
+                      <div
+                        onClick={() => setPurgeAllChecked(v => !v)}
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 10,
+                          padding: '10px 12px', borderRadius: 9, cursor: 'pointer',
+                          border: `1.5px solid ${purgeAllChecked ? 'rgba(255,60,60,0.5)' : 'var(--border)'}`,
+                          background: purgeAllChecked ? 'rgba(255,60,60,0.08)' : 'var(--bg2)',
+                          transition: 'all .15s', marginBottom: 14, userSelect: 'none',
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                          border: `2px solid ${purgeAllChecked ? 'var(--red)' : 'var(--border)'}`,
+                          background: purgeAllChecked ? 'var(--red)' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all .15s',
+                        }}>
+                          {purgeAllChecked && (
+                            <svg width="9" height="9" viewBox="0 0 8 8" fill="none">
+                              <polyline points="1,4 3.2,6.2 7,2" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: purgeAllChecked ? 'var(--red)' : 'var(--text3)', lineHeight: 1.5, transition: 'color .15s' }}>
+                          I understand all deleted patterns are <b>permanently lost</b> and cannot be recovered.
+                        </span>
+                      </div>
+
+                      {/* Buttons */}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => { setConfirmPurgeAll(false); setPurgeAllChecked(false) }}
+                          style={{
+                            flex: 1, padding: '11px', borderRadius: 9, cursor: 'pointer',
+                            fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                            border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text2)',
+                          }}
+                        >✕ Cancel</button>
+                        <button
+                          disabled={!purgeAllChecked}
+                          onClick={() => { purgeAll(); setConfirmPurgeAll(false); setPurgeAllChecked(false) }}
+                          style={{
+                            flex: 1, padding: '11px', borderRadius: 9, cursor: purgeAllChecked ? 'pointer' : 'not-allowed',
+                            fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                            border: `1.5px solid ${purgeAllChecked ? 'rgba(255,60,60,0.6)' : 'rgba(255,60,60,0.2)'}`,
+                            background: purgeAllChecked ? 'rgba(255,60,60,0.2)' : 'rgba(255,60,60,0.05)',
+                            color: purgeAllChecked ? 'var(--red)' : 'rgba(255,60,60,0.3)',
+                            transition: 'all .2s',
+                          }}
+                        >🗑 Delete All</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Purge all trigger button */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 10px 4px' }}>
-                  <button onClick={purgeAll} style={{
+                  <button onClick={() => { setConfirmPurgeAll(true); setPurgeAllChecked(false) }} style={{
                     fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
                     padding: '4px 11px', borderRadius: 6, cursor: 'pointer',
                     border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
