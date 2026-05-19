@@ -217,7 +217,7 @@ function DetailSheet({ alert, onClose }) {
 }
 
 // ── Main TFScannerTab ─────────────────────────────────────
-export default function TFScannerTab({ timeframe, tabColor, settings, update, saveNowWithPatch, user, isFirstVisit, isActive, onAlertCount, onScanProgress }) {
+export default function TFScannerTab({ timeframe, tabColor, settings, update, saveNowWithPatch, user, isFirstVisit, isActive, onAlertCount, onScanProgress, onGoToPatterns }) {
   // Per-tab persistent settings stored under tf-specific keys
   const tfKey = tf => `${tf}_${timeframe}`
   const scanMode      = settings[tfKey('scanMode')]      ?? settings.scanMode      ?? 'all'
@@ -266,6 +266,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
   const [symLoadFailed, setSymLoadFailed] = useState(false)
   const [singleSym,     setSingleSym]    = useState('')
   const [loopCount,     setLoopCount]    = useState(0)
+  const [noPatternWarning, setNoPatternWarning] = useState(false)
 
   const timerRef    = useRef(null)
   const idRef       = useRef(0)
@@ -437,6 +438,11 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
 
   const runScan = useCallback(async (symOverride) => {
     if (scanningRef.current) return
+    // Guard: no patterns configured for this TF
+    if (scannersRef.current.length === 0) {
+      setNoPatternWarning(true)
+      return
+    }
     scanningRef.current = true
     setScanning(true); setProgress(0); setErrors([])
     abortRef.current = new AbortController()
@@ -549,6 +555,57 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
   return (
     <div style={{ paddingBottom: 4 }}>
       <DetailSheet alert={selectedAlert} onClose={()=>setSelectedAlert(null)}/>
+
+      {/* ── No-pattern warning modal ── */}
+      {noPatternWarning && (
+        <>
+          <div onClick={() => setNoPatternWarning(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+          }} />
+          <div style={{
+            position: 'fixed', left: '50%', top: '50%',
+            transform: 'translate(-50%,-50%)',
+            zIndex: 300, width: 'min(310px, 90vw)',
+            borderRadius: 18, padding: '24px 20px',
+            background: 'var(--bg1)',
+            border: '1.5px solid rgba(255,200,0,0.4)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔬</div>
+            <div style={{ fontWeight: 900, fontSize: 15, color: 'rgb(255,200,0)', marginBottom: 6 }}>
+              No Patterns for {timeframe.toUpperCase()}
+            </div>
+            <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', lineHeight: 1.7, marginBottom: 18 }}>
+              There are no active patterns configured to scan on the <b style={{ color: tabColor }}>{timeframe}</b> timeframe.<br/>
+              Build a pattern and enable this TF to start scanning.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => { setNoPatternWarning(false); onGoToPatterns?.() }}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                  border: '1.5px solid rgba(255,200,0,0.5)',
+                  background: 'rgba(255,200,0,0.12)', color: 'rgb(255,200,0)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 15 }}>🔬</span> Open Patterns
+              </button>
+              <button
+                onClick={() => setNoPatternWarning(false)}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
+                  border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+                }}
+              >Dismiss</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── TF header ── */}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,gap:8 }}>

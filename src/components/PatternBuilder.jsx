@@ -105,6 +105,16 @@ const COND_COLORS = [
 ]
 function condColor(idx) { return COND_COLORS[idx % COND_COLORS.length] }
 
+// Group bracket colours (cycles across distinct groups)
+const GROUP_COLORS = ['#69f0ae','#ff6090','#ffab40','#40c4ff','#ea80fc','#ccff90']
+// Map groupId → stable color using a simple hash
+function groupColor(groupId) {
+  if (!groupId) return GROUP_COLORS[0]
+  let h = 0
+  for (let i = 0; i < groupId.length; i++) h = (h * 31 + groupId.charCodeAt(i)) >>> 0
+  return GROUP_COLORS[h % GROUP_COLORS.length]
+}
+
 // Mirror an operator (flip comparison direction)
 const MIRROR_OP = { '>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '≠': '≠' }
 
@@ -212,6 +222,7 @@ export function condFormula(c) {
 function blankCond() {
   return {
     id: uid(), enabled: true, joinNext: 'AND',
+    groupId: null,   // null = ungrouped; same string = same group (evaluated as a unit)
     label: '',
     lhsField: 'ema20', lhsOffset: 0,
     op: '>',
@@ -403,13 +414,52 @@ export function compilePattern(pattern) {
       return Math.abs(lhsV - rhsV) >= 1e-9
     }
 
-    // Fold AND/OR left→right
-    let acc = evalCond(active[0])
+    // ── Group-aware evaluation ────────────────────────────────────────────────
+    // Conditions with the same groupId are evaluated as a bracketed sub-expression.
+    // The joinNext on the LAST condition of a group connects it to the next group/condition.
+    // Ungrouped conditions (groupId=null) each form their own single-item "group".
+
+    // Step 1: split active conditions into segments (groups + singletons)
+    // Each segment: { conds: [...], joinAfter: 'AND'|'OR'|null }
+    const segments = []
+    let i = 0
+    while (i < active.length) {
+      const gid = active[i].groupId
+      if (gid) {
+        // Collect all consecutive conditions with same groupId
+        const members = []
+        while (i < active.length && active[i].groupId === gid) {
+          members.push(active[i])
+          i++
+        }
+        // joinAfter = joinNext of last member in group
+        const joinAfter = members[members.length - 1].joinNext || 'AND'
+        segments.push({ conds: members, joinAfter })
+      } else {
+        segments.push({ conds: [active[i]], joinAfter: active[i].joinNext || 'AND' })
+        i++
+      }
+    }
+
+    // Step 2: evaluate each segment to a boolean
+    function evalSegment(seg) {
+      let acc = evalCond(seg.conds[0])
+      if (acc == null) return null
+      for (let j = 1; j < seg.conds.length; j++) {
+        const r = evalCond(seg.conds[j])
+        if (r == null) return null
+        acc = seg.conds[j - 1].joinNext === 'OR' ? acc || r : acc && r
+      }
+      return acc
+    }
+
+    // Step 3: fold segments together with inter-segment joins
+    let acc = evalSegment(segments[0])
     if (acc == null) return null
-    for (let i = 1; i < active.length; i++) {
-      const r = evalCond(active[i])
+    for (let s = 1; s < segments.length; s++) {
+      const r = evalSegment(segments[s])
       if (r == null) return null
-      acc = active[i-1].joinNext === 'OR' ? acc || r : acc && r
+      acc = segments[s - 1].joinAfter === 'OR' ? acc || r : acc && r
     }
     if (!acc) return null
 
@@ -506,11 +556,12 @@ function IBtn({ onClick, title, children, col = 'var(--text3)' }) {
   )
 }
 
-function JoinBadge({ value, onChange }) {
+function JoinBadge({ value, onChange, onGroupToggle, grouped, groupColor }) {
   const isAnd = value === 'AND'
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, margin: '1px 0' }}>
-      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, margin: '1px 0' }}>
+      <div style={{ flex: 1, height: 1, background: grouped ? `${groupColor}40` : 'var(--border)' }} />
+      {/* AND / OR toggle */}
       <button onClick={() => onChange(isAnd ? 'OR' : 'AND')} style={{
         padding: '3px 14px', borderRadius: 20, cursor: 'pointer',
         fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
@@ -519,7 +570,20 @@ function JoinBadge({ value, onChange }) {
         color: isAnd ? BLU : AMB,
         letterSpacing: '.07em', transition: 'all .15s',
       }}>{value}</button>
-      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      {/* Group toggle button */}
+      <button
+        onClick={onGroupToggle}
+        title={grouped ? 'Remove from group' : 'Group with condition above'}
+        style={{
+          padding: '3px 8px', borderRadius: 20, cursor: 'pointer',
+          fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
+          border: `1.5px solid ${grouped ? groupColor + 'cc' : 'rgba(150,150,150,0.3)'}`,
+          background: grouped ? groupColor + '22' : 'transparent',
+          color: grouped ? groupColor : 'var(--text3)',
+          letterSpacing: '.05em', transition: 'all .15s',
+        }}
+      >{grouped ? '[ ]' : '( )'}</button>
+      <div style={{ flex: 1, height: 1, background: grouped ? `${groupColor}40` : 'var(--border)' }} />
     </div>
   )
 }
@@ -1424,27 +1488,108 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {pattern.conditions.map((cond, idx) => (
-                <React.Fragment key={cond.id}>
-                  <CondCard
-                    cond={cond} idx={idx} total={pattern.conditions.length} color={condColor(idx)}
-                    onChange={c => setCond(idx, c)}
-                    onRemove={() => { delCond(idx); setOpenCondIds(prev => { const s = new Set(prev); s.delete(cond.id); return s }) }}
-                    onCopy={() => copyCond(idx)}
-                    onMoveUp={() => moveCond(idx, idx - 1)}
-                    onMoveDown={() => moveCond(idx, idx + 1)}
-                    open={openCondIds.has(cond.id)}
-                    onToggleOpen={() => setOpenCondIds(prev => {
-                      const s = new Set(prev)
-                      s.has(cond.id) ? s.delete(cond.id) : s.add(cond.id)
-                      return s
-                    })}
-                  />
-                  {idx < pattern.conditions.length - 1 && (
-                    <JoinBadge value={cond.joinNext || 'AND'} onChange={v => setJoin(idx, v)} />
-                  )}
-                </React.Fragment>
-              ))}
+              {pattern.conditions.map((cond, idx) => {
+                const gid = cond.groupId
+                const gCol = gid ? groupColor(gid) : null
+                const conditions = pattern.conditions
+                const isGroupStart = gid && (idx === 0 || conditions[idx - 1].groupId !== gid)
+                const isGroupEnd   = gid && (idx === conditions.length - 1 || conditions[idx + 1].groupId !== gid)
+
+                return (
+                  <React.Fragment key={cond.id}>
+                    {/* Group open bracket */}
+                    {isGroupStart && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        paddingLeft: 4, marginBottom: -2,
+                      }}>
+                        <div style={{
+                          width: 10, height: 10, borderRadius: '2px 0 0 0',
+                          borderTop: `2px solid ${gCol}`, borderLeft: `2px solid ${gCol}`,
+                        }} />
+                        <span style={{
+                          fontSize: 8, fontFamily: 'var(--mono)', fontWeight: 900,
+                          color: gCol, letterSpacing: '.1em', opacity: .8,
+                        }}>GROUP</span>
+                      </div>
+                    )}
+
+                    {/* Condition card — indented when inside a group */}
+                    <div style={{ paddingLeft: gid ? 10 : 0, borderLeft: gid ? `2px solid ${gCol}44` : 'none', borderRadius: 2, transition: 'all .15s' }}>
+                      <CondCard
+                        cond={cond} idx={idx} total={pattern.conditions.length} color={condColor(idx)}
+                        onChange={c => setCond(idx, c)}
+                        onRemove={() => { delCond(idx); setOpenCondIds(prev => { const s = new Set(prev); s.delete(cond.id); return s }) }}
+                        onCopy={() => copyCond(idx)}
+                        onMoveUp={() => moveCond(idx, idx - 1)}
+                        onMoveDown={() => moveCond(idx, idx + 1)}
+                        open={openCondIds.has(cond.id)}
+                        onToggleOpen={() => setOpenCondIds(prev => {
+                          const s = new Set(prev)
+                          s.has(cond.id) ? s.delete(cond.id) : s.add(cond.id)
+                          return s
+                        })}
+                      />
+                    </div>
+
+                    {/* Group close bracket */}
+                    {isGroupEnd && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        paddingLeft: 4, marginTop: -2,
+                      }}>
+                        <div style={{
+                          width: 10, height: 10, borderRadius: '0 0 0 2px',
+                          borderBottom: `2px solid ${gCol}`, borderLeft: `2px solid ${gCol}`,
+                        }} />
+                        <span style={{
+                          fontSize: 8, fontFamily: 'var(--mono)', fontWeight: 900,
+                          color: gCol, letterSpacing: '.1em', opacity: .8,
+                        }}>END GROUP</span>
+                      </div>
+                    )}
+
+                    {idx < pattern.conditions.length - 1 && (() => {
+                      const nextCond = pattern.conditions[idx + 1]
+                      const bothSameGroup = gid && nextCond.groupId === gid
+                      // Are these two adjacent conditions already in the same group?
+                      const isGrouped = bothSameGroup
+                      return (
+                        <JoinBadge
+                          value={cond.joinNext || 'AND'}
+                          onChange={v => setJoin(idx, v)}
+                          grouped={isGrouped}
+                          groupColor={isGrouped ? gCol : '#888'}
+                          onGroupToggle={() => {
+                            const conds = [...pattern.conditions]
+                            const cur  = { ...conds[idx] }
+                            const next = { ...conds[idx + 1] }
+                            if (isGrouped) {
+                              // Remove next from group; if only one left in group, ungroup it too
+                              const membersAfter = conds.filter((c, i) => i !== idx + 1 && c.groupId === gid)
+                              if (membersAfter.length <= 1) {
+                                // Dissolve whole group
+                                conds.forEach((c, i) => { if (c.groupId === gid) conds[i] = { ...c, groupId: null } })
+                              } else {
+                                next.groupId = null
+                                conds[idx + 1] = next
+                              }
+                            } else {
+                              // Group these two together
+                              const existingGid = cur.groupId || next.groupId || `grp_${uid()}`
+                              cur.groupId  = existingGid
+                              next.groupId = existingGid
+                              conds[idx]     = cur
+                              conds[idx + 1] = next
+                            }
+                            s('conditions', conds)
+                          }}
+                        />
+                      )
+                    })()}
+                  </React.Fragment>
+                )
+              })}
             </div>
 
             <button

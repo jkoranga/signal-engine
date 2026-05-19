@@ -13,6 +13,7 @@ export const TF_TABS = [
   { id: '3m',  label: '3m',  color: '#ffa94d', glow: 'rgba(255,169,77,0.3)'   },
   { id: '5m',  label: '5m',  color: '#ffd43b', glow: 'rgba(255,212,59,0.3)'   },
   { id: '15m', label: '15m', color: '#69db7c', glow: 'rgba(105,219,124,0.3)'  },
+  { id: '30m', label: '30m', color: '#38d9a9', glow: 'rgba(56,217,169,0.3)'   },
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
@@ -346,7 +347,7 @@ const PATTERN_TF_LIST = ['1m','3m','5m','15m','30m','1h','4h','1d']
 
 function defaultTfs(s) { return s.tfs && s.tfs.length > 0 ? s.tfs : ['15m','1h'] }
 
-function PatternsModal({ open, onClose, settings, update }) {
+function PatternsModal({ open, onClose, settings, update, onGoToBuilder }) {
   const [expanded, setExpanded] = React.useState({})
   const [sideFilter, setSideFilter] = React.useState('all')
 
@@ -739,6 +740,32 @@ function PatternsModal({ open, onClose, settings, update }) {
               </div>
             )
           })()}
+
+          {/* Empty state — no patterns at all */}
+          {visible.length === 0 && (settings.customPatterns || []).length === 0 && (
+            <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🔬</div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text2)', marginBottom: 6 }}>No Patterns Yet</div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', lineHeight: 1.7, marginBottom: 18 }}>
+                Build custom patterns in the Pattern Builder<br/>and enable them here to scan.
+              </div>
+              <button
+                onClick={() => { onClose(); onGoToBuilder?.() }}
+                style={{
+                  padding: '11px 22px', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                  border: '1.5px solid var(--lime-border)',
+                  background: 'var(--lime-dim)', color: 'var(--lime)',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                </svg>
+                Go to Pattern Builder
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -755,6 +782,7 @@ export default function App() {
   const [settingsOpenCount, setSettingsOpenCount] = useState(0)
   const [showPatterns, setShowPatterns] = useState(false)
   const [prevTab, setPrevTab] = useState('15m')
+  const [userTappedTabs, setUserTappedTabs] = useState(new Set())
   const [showExitWarning, setShowExitWarning] = useState(false)
 
   // Back button: go home first press, show exit warning second press
@@ -1035,9 +1063,10 @@ export default function App() {
                 saveNowWithPatch={saveNowWithPatch}
                 user={user}
                 isFirstVisit={isFirstVisit && tab.id==='15m'}
-                isActive={activeTab===tab.id}
+                isActive={activeTab===tab.id && userTappedTabs.has(tab.id)}
                 onAlertCount={handleAlertCount}
                 onScanProgress={handleScanProgress}
+                onGoToPatterns={togglePatterns}
               />
             </ErrorBoundary>
           </div>
@@ -1065,7 +1094,11 @@ export default function App() {
               key={tab.id}
               className={`bottom-tab${tab.isSettings?' bottom-tab-settings':''}${tab.isBuilder&&isActive?' bottom-tab-builder-active':''}`}
               onClick={() => {
-                navigateTo(tab.id === 'builder' ? 'builder' : tab.id)
+                const dest = tab.id === 'builder' ? 'builder' : tab.id
+                if (!tab.isSettings && !tab.isBuilder) {
+                  setUserTappedTabs(prev => new Set([...prev, dest]))
+                }
+                navigateTo(dest)
               }}
               style={{
                 color: isActive ? tab.color : 'var(--text3)',
@@ -1105,6 +1138,7 @@ export default function App() {
         onClose={togglePatterns}
         settings={settings}
         update={update}
+        onGoToBuilder={() => navigateTo('builder')}
       />
 
     </div>
