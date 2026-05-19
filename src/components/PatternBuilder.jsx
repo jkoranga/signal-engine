@@ -549,18 +549,19 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           title={cond.enabled ? 'Disable condition' : 'Enable condition'}
           style={{
             height: 20, padding: '0 7px', borderRadius: 5, cursor: 'pointer', flexShrink: 0,
-            border: `1.5px solid ${cond.enabled ? color + '80' : 'var(--border)'}`,
-            background: cond.enabled ? `${color}20` : 'var(--bg3)',
-            color: cond.enabled ? color : 'var(--text3)',
+            border: `1.5px solid ${cond.enabled ? color + '80' : 'rgba(255,60,60,0.5)'}`,
+            background: cond.enabled ? `${color}20` : 'rgba(255,60,60,0.1)',
+            color: cond.enabled ? color : 'var(--red)',
             fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
             letterSpacing: '.04em', transition: 'all .15s',
             display: 'flex', alignItems: 'center', gap: 4,
+            boxShadow: cond.enabled ? 'none' : '0 0 6px rgba(255,60,60,0.35)',
           }}
         >
           <div style={{
             width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-            background: cond.enabled ? color : 'var(--border)',
-            boxShadow: cond.enabled ? `0 0 5px ${color}` : 'none',
+            background: cond.enabled ? color : 'var(--red)',
+            boxShadow: cond.enabled ? `0 0 5px ${color}` : '0 0 6px rgba(255,60,60,0.9)',
             transition: 'all .15s',
           }} />
           {cond.enabled ? 'ON' : 'OFF'}
@@ -1047,7 +1048,7 @@ function IconPicker({ value, onChange, color }) {
 }
 
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOpen, allPatternNames }) {
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -1055,6 +1056,10 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
   const [mirrorName, setMirrorName] = useState('')
   const [mirrorNameAlert, setMirrorNameAlert] = useState('')
   const mirrorInputRef = React.useRef(null)
+  const [copyPopup, setCopyPopup] = useState(false)
+  const [copyName, setCopyName] = useState('')
+  const [copyNameAlert, setCopyNameAlert] = useState('')
+  const copyInputRef = React.useRef(null)
   const mirroredDefaultName = pattern.side === 'bull'
     ? pattern.name.replace(/bull/gi, 'Bear').replace(/buy/gi, 'Sell').replace(/long/gi, 'Short') || `${pattern.name} Mirror`
     : pattern.name.replace(/bear/gi, 'Bull').replace(/sell/gi, 'Buy').replace(/short/gi, 'Long') || `${pattern.name} Mirror`
@@ -1078,6 +1083,25 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
       setTimeout(() => { mirrorInputRef.current?.focus(); mirrorInputRef.current?.select() }, 60)
     }
   }, [mirrorPopup])
+
+  React.useEffect(() => {
+    if (copyPopup) {
+      setCopyName(`${pattern.name} Copy`)
+      setCopyNameAlert('')
+      setTimeout(() => { copyInputRef.current?.focus(); copyInputRef.current?.select() }, 60)
+    }
+  }, [copyPopup])
+
+  function handleCopySave() {
+    const name = copyName.trim()
+    if (!name) { setCopyNameAlert('Please enter a name.'); return }
+    if ((allPatternNames || []).some(n => n.toLowerCase() === name.toLowerCase())) {
+      setCopyNameAlert('This name is already taken. Choose a different name.')
+      return
+    }
+    onCopyPattern(name)
+    setCopyPopup(false)
+  }
 
   function handleMirrorSave() {
     const name = mirrorName.trim()
@@ -1187,13 +1211,79 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
         </>
       )}
 
+      {/* ── Copy rename popup ── */}
+      {copyPopup && (
+        <>
+          <div onClick={() => setCopyPopup(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0,0,0,0.45)',
+          }} />
+          <div style={{
+            position: 'absolute', top: 6, left: 0, right: 0, zIndex: 100,
+            borderRadius: 13, padding: '18px 16px',
+            background: 'var(--bg1)',
+            border: '1.5px solid rgba(255,200,0,0.5)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,200,0,0.1)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 18 }}>⧉</span>
+              <div style={{ fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 14, color: 'rgb(255,200,0)' }}>
+                Copy Pattern
+              </div>
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+              Creates an exact copy of <b style={{ color: color }}>{pattern.name}</b> — same side, same conditions. Give it a new name.
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', fontWeight: 700,
+              letterSpacing: '.07em', marginBottom: 6 }}>NAME</div>
+            <input
+              ref={copyInputRef}
+              value={copyName}
+              onChange={e => { setCopyName(e.target.value); setCopyNameAlert('') }}
+              onKeyDown={e => { if (e.key === 'Enter') handleCopySave(); if (e.key === 'Escape') setCopyPopup(false) }}
+              placeholder="Enter a name for the copy…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--bg3)',
+                border: `1.5px solid ${copyNameAlert ? 'var(--red)' : 'rgba(255,200,0,0.5)'}`,
+                color: 'var(--text)', borderRadius: 8, padding: '10px 12px',
+                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                boxShadow: copyNameAlert ? '0 0 0 3px rgba(255,60,60,0.18)' : '0 0 0 3px rgba(255,200,0,0.1)',
+                outline: 'none', marginBottom: copyNameAlert ? 6 : 13,
+                transition: 'border .2s, box-shadow .2s',
+              }}
+            />
+            {copyNameAlert && (
+              <div style={{
+                fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)',
+                marginBottom: 10, padding: '5px 8px', borderRadius: 6,
+                background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.25)',
+              }}>
+                ⚠ {copyNameAlert}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleCopySave} style={{
+                flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                border: '1.5px solid rgba(255,200,0,0.5)', background: 'rgba(255,200,0,0.12)', color: 'rgb(255,200,0)',
+              }}>⧉ Save Copy</button>
+              <button onClick={() => setCopyPopup(false)} style={{
+                padding: '10px 15px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text3)',
+              }}>Cancel</button>
+            </div>
+          </div>
+        </>
+      )}
+
     <div style={{
       borderRadius: 13,
       border: `1.5px solid ${pattern.enabled ? color + '55' : 'var(--border)'}`,
       background: 'var(--bg1)', overflow: 'hidden',
-      opacity: mirrorPopup ? 0.3 : 1,
+      opacity: mirrorPopup || copyPopup ? 0.3 : 1,
       transition: 'opacity .15s',
-      pointerEvents: mirrorPopup ? 'none' : 'auto',
+      pointerEvents: mirrorPopup || copyPopup ? 'none' : 'auto',
     }}>
       {/* Header */}
       <div
@@ -1226,7 +1316,6 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
             }} />
           </div>
           <button onClick={() => {
-            // If mirrored name is free, mirror immediately with no popup
             const names = (allPatternNames || []).map(n => n.toLowerCase())
             if (!names.includes(mirroredDefaultName.toLowerCase())) {
               onMirrorPattern(mirroredDefaultName)
@@ -1240,6 +1329,14 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, defaultOp
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700,
           }}>⇄</button>
+
+          <button onClick={() => setCopyPopup(true)} title="Copy pattern with new name" style={{
+            width: 28, height: 28, borderRadius: 7,
+            border: '1px solid rgba(255,200,0,0.35)', background: 'rgba(255,200,0,0.08)',
+            color: 'rgb(255,200,0)', cursor: 'pointer', fontSize: 15,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700,
+          }}>⧉</button>
 
           {confirmDelete ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1421,6 +1518,7 @@ export default function PatternBuilderTab({ settings, update }) {
   const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
+  const [confirmPurgeId, setConfirmPurgeId] = useState(null)
 
   // Keep a ref to patterns so debounced save always uses the latest version
   const patternsRef = useRef(patterns)
@@ -1508,6 +1606,21 @@ export default function PatternBuilderTab({ settings, update }) {
     savePatterns(ps)
   }
 
+  function copyPattern(i, customName) {
+    const src = patterns[i]
+    const copy = {
+      ...src,
+      id: `custom_${uid()}`,
+      name: customName,
+      conditions: src.conditions.map(c => ({ ...c, id: uid() })),
+      createdAt: Date.now(),
+    }
+    const ps = [...patterns]
+    ps.splice(i + 1, 0, copy)
+    setNewId(null)
+    savePatterns(ps)
+  }
+
   const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
   const bear = patterns.filter(p => p.side === 'bear' && p.enabled).length
 
@@ -1557,6 +1670,7 @@ export default function PatternBuilderTab({ settings, update }) {
                 key={p.id} pattern={p} defaultOpen={p.id === newId}
                 onChange={np => upd(i, np)} onDelete={() => del(i)}
                 onMirrorPattern={(name) => mirrorPattern(i, name)}
+                onCopyPattern={(name) => copyPattern(i, name)}
                 allPatternNames={patterns.map(x => x.name)}
               />
             ))}
@@ -1663,12 +1777,29 @@ export default function PatternBuilderTab({ settings, update }) {
                           border: '1px solid rgba(0,230,118,0.35)', background: 'rgba(0,230,118,0.08)',
                           color: G,
                         }}>↩ Restore</button>
-                        <button onClick={() => purgeOne(i)} title="Delete permanently" style={{
-                          width: 26, height: 26, borderRadius: 6, cursor: 'pointer', flexShrink: 0,
-                          border: '1px solid rgba(255,60,60,0.25)', background: 'rgba(255,60,60,0.06)',
-                          color: 'var(--red)', fontSize: 13,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>×</button>
+                        {confirmPurgeId === p.id ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                            <button onClick={() => { purgeOne(i); setConfirmPurgeId(null) }} style={{
+                              padding: '3px 8px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                              border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)',
+                              color: 'var(--red)',
+                            }}>Yes</button>
+                            <button onClick={() => setConfirmPurgeId(null)} style={{
+                              padding: '3px 8px', borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
+                              border: '1px solid var(--border)', background: 'var(--bg3)',
+                              color: 'var(--text2)',
+                            }}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmPurgeId(p.id)} title="Delete permanently" style={{
+                            width: 26, height: 26, borderRadius: 6, cursor: 'pointer', flexShrink: 0,
+                            border: '1px solid rgba(255,60,60,0.25)', background: 'rgba(255,60,60,0.06)',
+                            color: 'var(--red)', fontSize: 13,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>×</button>
+                        )}
                       </div>
                     )
                   })}
