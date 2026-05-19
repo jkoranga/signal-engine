@@ -273,17 +273,23 @@ export async function fetch24hTickers() {
   return {}
 }
 
-// ─── Top 100 fallback symbols (used only when ALL API mirrors fail) ───────────
+// ─── Top symbols + Indian exchange coverage ───────────────────────────────────
+// NOTE: Delta Exchange India and CoinDCX/WazirX use their own APIs incompatible
+// with the Binance OHLCV scanner format. Their coins that are ALSO listed on
+// Binance are included here so they appear in the full scan. Coins exclusive
+// to Indian exchanges (INR pairs only) cannot be scanned via this engine.
 export const TOP_SYMBOLS = [
-  // Tier 1 — mega caps
+  // ── Tier 1 — Mega caps (all Indian exchanges) ───────────────────────────────
   'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT',
   'ADAUSDT','DOGEUSDT','AVAXUSDT','MATICUSDT','DOTUSDT',
-  // Tier 2 — large caps
+
+  // ── Tier 2 — Large caps ─────────────────────────────────────────────────────
   'LINKUSDT','UNIUSDT','LTCUSDT','ATOMUSDT','NEARUSDT',
   'APTUSDT','ARBUSDT','OPUSDT','INJUSDT','SUIUSDT',
   'SHIBUSDT','TRXUSDT','TONUSDT','FETUSDT','RNDRUSDT',
   'WIFUSDT','PEPEUSDT','FLOKIUSDT','TIAUSDT','JUPUSDT',
-  // Tier 3 — mid caps
+
+  // ── Tier 3 — Mid caps ───────────────────────────────────────────────────────
   'AAVEUSDT','SNXUSDT','CRVUSDT','MKRUSDT','COMPUSDT',
   'LDOUSDT','STXUSDT','GRTUSDT','IMXUSDT','MANTAUSDT',
   'EIGENUSDT','ENAUSDT','PYTHUSDT','WUSDT','ALTUSDT',
@@ -291,17 +297,46 @@ export const TOP_SYMBOLS = [
   'KAVAUSDT','ZILUSDT','IOSTUSDT','IOTXUSDT','ONTUSDT',
   'HBARUSDT','ALGOUSDT','XLMUSDT','VETUSDT','FILUSDT',
   'EGLDUSDT','ICPUSDT','FLOWUSDT','AXSUSDT','SANDUSDT',
-  'MANAUSDT','APEUSDT','GMTUSDT','GALUSDT','OPUSDT',
-  // Tier 4 — active alts
-  'FTMUSDT','CELOUSDT','KLAYUSDT','ZILUSDT','STORJUSDT',
-  'RLCUSDT','CTSIUSDT','BANDUSDT','TRUUSDT','COTIUSDT',
-  'ANKRUSDT','DUSKUSDT','AKROUSDT','ORSNUSDT','BAKEUSDT',
-  'CAKEUSDT','ALPACAUSDT','FORTHUSDT','MASKUSDT','BADGERUSDT',
-  'MIRUSDT','ALPHALUSDT','RIFUSDT','DREPUSDT','BNTUSDT',
-  'UMAUSDT','BALUSUSDT','RENUSDT','KNCUSDT','BANDUSDT',
-  'CVXUSDT','FXSUSDT','FRAXUSDT','FLMUSDT','HNTUSDT',
-  'RAYUSDT','SRMUSDT','STGUSDT','ACHUSDT','TUSDT',
-  'XVGUSDT','THETAUSDT','FTMUSDT','ONEUSDT','ZILUSDT',
+  'MANAUSDT','APEUSDT','GMTUSDT','GALUSDT',
+  'FTMUSDT','KLAYUSDT','STORJUSDT','RLCUSDT','CTSIUSDT',
+  'BANDUSDT','TRUUSDT','ANKRUSDT','MASKUSDT','BNTUSDT',
+  'UMAUSDT','RENUSDT','KNCUSDT','CVXUSDT','FXSUSDT',
+  'STGUSDT','THETAUSDT','ONEUSDT','HNTUSDT','RAYUSDT',
+
+  // ── Delta Exchange India popular futures ────────────────────────────────────
+  // These coins trade as USDT perps on Delta India AND are on Binance
+  'CELOUSDT','COTIUSDT','BAKEUSDT','CAKEUSDT','ALPACAUSDT',
+  'MIRUSDT','RIFUSDT','DREPUSDT','FLMUSDT',
+  'XVGUSDT','TUSDT','ACHUSDT',
+
+  // ── CoinDCX / WazirX popular coins (Binance listed) ────────────────────────
+  'CHZUSDT','ENJUSDT','BATUSDT','ZRXUSDT','LRCUSDT',
+  'AUDIOUSDT','CTXCUSDT','REQUSDT','POWRUSDT','FUNUSDT',
+  'MTLUSDT','POLYUSDT','OXTUSDT','NKNUSDT','PONDUSDT',
+  'CFXUSDT','HOOKUSDT','HIGHUSDT','PHBUSDT','MAGICUSDT',
+  'LDOUSDT','AMBUSDT','GALUSDT','PROSUSDT','REIUSDT',
+  'ASTRUSDT','SSVUSDT','IDUSDT','EDUUSDT','SUIUSDT',
+  'ACEUSDT','NFPUSDT','AIUSDT','XAIUSDT','MANTAUSDT',
+  'ALTUSDT','JUPUSDT','RONINUSDT','PIXELUSDT','PORTALUSDT',
+  'AXLUSDT','WLDUSDT','CYBERUSDT','ARKMUSDT','GLMUSDT',
+  'BONDUSDT','FORTHUSDT','BADGERUSDT','ALPHALUSDT','BALUSUSDT',
+
+  // ── Additional Delta India perpetuals (high volume) ─────────────────────────
+  'ORDIUSDT','SATSUSDT','RATS','1000SATSUSDT','BOMEUSDT',
+  'MEMEUSDT','WIFUSDT','BRETTUSDT','MEWUSDT','DOGENUSDT',
+  'DOGSUSDT','NOTUSDT','HMSTRUSDT','CATIUSDT','EIGENUSDT',
+  'SCRUSDT','NEIROUSDT','TURBOUSDT','GOATUSDT','PNUTUSDT',
+  'ACTUSDT','OMUSDT','MOVEUSDT','VIRTUALUSDT','THEUSDT',
+
+  // ── Popular Indian altcoins also on Binance ──────────────────────────────────
+  'POLUSDT','GALAUSDT','ILVUSDT','SLPUSDT','YGG',
+  'ALICEUSDT','TLMUSDT','DYDXUSDT','STMXUSDT','NULSUSDT',
+  'DENTUSDT','WINUSDT','HOTUSDT','CELRUSDT','CVCUSDT',
+  'QTUMUSDT','ICXUSDT','ZENUSDT','LSKUSDT','NANOUSUSDT',
+  'WAVESUSDT','SCUSDT','DGBUSDT','REEFUSDT','HARDUSDT',
+  'SXPUSDT','WINGUSDT','LITUSDT','UNFIUSDT','BELUSDT',
+  'VITEUSDT','RSRUSDT','MBLUSDT','IRISUSDT','MDTUSDT',
+  'TRIBEUSDT','CFXUSDT','LQTYUSDT','BNXUSDT','REIUSDT',
 ]
 
 // ─── Sound ────────────────────────────────────────────────────────────────────

@@ -1869,9 +1869,135 @@ export default function PatternBuilderTab({ settings, update }) {
 
   const bull = patterns.filter(p => p.side === 'bull' && p.enabled).length
   const bear = patterns.filter(p => p.side === 'bear' && p.enabled).length
+  const [importError, setImportError] = useState('')
+  const [importSuccess, setImportSuccess] = useState('')
+  const [importPopup, setImportPopup] = useState(false)
+  const importInputRef = React.useRef(null)
+
+  function exportPatterns() {
+    const data = {
+      _type: 'signal_engine_patterns',
+      _version: 1,
+      _exportedAt: new Date().toISOString(),
+      _count: patterns.length,
+      patterns,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `patterns_backup_${new Date().toISOString().slice(0,10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError('')
+    setImportSuccess('')
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target.result)
+        // Accept both wrapped format and raw array
+        const imported = Array.isArray(json)
+          ? json
+          : (json._type === 'signal_engine_patterns' && Array.isArray(json.patterns))
+            ? json.patterns
+            : null
+        if (!imported) { setImportError('Invalid file — not a patterns backup.'); return }
+        if (imported.length === 0) { setImportError('File has no patterns.'); return }
+        // Merge: skip duplicates by name, re-id all to avoid collisions
+        const existingNames = new Set(patterns.map(p => p.name.toLowerCase()))
+        const toAdd   = []
+        const skipped = []
+        imported.forEach(p => {
+          if (existingNames.has((p.name||'').toLowerCase())) {
+            skipped.push(p.name)
+          } else {
+            toAdd.push({ ...p, id: `custom_${uid()}`, conditions: (p.conditions||[]).map(c => ({...c, id: uid()})) })
+          }
+        })
+        if (toAdd.length === 0) {
+          setImportError(`All ${skipped.length} pattern(s) already exist by name — nothing imported.`)
+          return
+        }
+        savePatterns([...patterns, ...toAdd])
+        setImportSuccess(`✓ Imported ${toAdd.length} pattern(s)${skipped.length ? ` · ${skipped.length} skipped (duplicate names)` : ''}.`)
+        setImportPopup(false)
+      } catch {
+        setImportError('Could not parse file — make sure it\'s a valid JSON backup.')
+      }
+    }
+    reader.readAsText(file)
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }
 
   return (
     <div style={{ padding: '14px 10px 90px', maxWidth: 620, margin: '0 auto' }}>
+
+      {/* Import popup modal */}
+      {importPopup && (
+        <>
+          <div onClick={() => { setImportPopup(false); setImportError('') }} style={{
+            position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+          }} />
+          <div style={{
+            position: 'fixed', left: '50%', top: '50%',
+            transform: 'translate(-50%,-50%)',
+            zIndex: 300, width: 'min(320px, 92vw)',
+            borderRadius: 16, padding: '22px 18px',
+            background: 'var(--bg1)',
+            border: '1.5px solid rgba(100,200,255,0.4)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📥</div>
+              <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--text)' }}>Import Patterns</div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 5, lineHeight: 1.7 }}>
+                Select a <b>.json</b> backup file exported from this app.<br/>
+                Duplicate names are skipped automatically.
+              </div>
+            </div>
+            <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
+            {importError && (
+              <div style={{
+                fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)',
+                padding: '8px 10px', borderRadius: 8, marginBottom: 12,
+                background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.3)',
+              }}>⚠ {importError}</div>
+            )}
+            <input
+              ref={importInputRef}
+              type="file" accept=".json" onChange={handleImportFile}
+              style={{ display: 'none' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button
+                onClick={() => importInputRef.current?.click()}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                  border: '1.5px solid rgba(100,200,255,0.5)',
+                  background: 'rgba(100,200,255,0.1)', color: 'var(--text)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >📂 Choose JSON File</button>
+              <button
+                onClick={() => { setImportPopup(false); setImportError('') }}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
+                  border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1881,13 +2007,53 @@ export default function PatternBuilderTab({ settings, update }) {
             Visual condition editor · live on every scan
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 5 }}>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700, padding: '3px 9px', borderRadius: 6,
             background: 'rgba(0,230,118,0.1)', color: G, border: '1px solid rgba(0,230,118,0.3)' }}>🟢 {bull}</span>
           <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700, padding: '3px 9px', borderRadius: 6,
             background: 'rgba(255,60,80,0.1)', color: R, border: '1px solid rgba(255,60,80,0.3)' }}>🔴 {bear}</span>
+          {/* Export button */}
+          <button
+            onClick={exportPatterns}
+            disabled={patterns.length === 0}
+            title="Export all patterns as JSON backup"
+            style={{
+              padding: '4px 10px', borderRadius: 7, cursor: patterns.length === 0 ? 'not-allowed' : 'pointer',
+              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+              border: '1px solid rgba(0,230,118,0.4)',
+              background: patterns.length === 0 ? 'transparent' : 'rgba(0,230,118,0.08)',
+              color: patterns.length === 0 ? 'var(--text3)' : G,
+              opacity: patterns.length === 0 ? 0.4 : 1,
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >📤 Export</button>
+          {/* Import button */}
+          <button
+            onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
+            title="Import patterns from JSON backup"
+            style={{
+              padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
+              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+              border: '1px solid rgba(100,200,255,0.4)',
+              background: 'rgba(100,200,255,0.08)', color: 'var(--text2)',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >📥 Import</button>
         </div>
       </div>
+
+      {/* Import success toast */}
+      {importSuccess && (
+        <div style={{
+          fontSize: 10, fontFamily: 'var(--mono)', color: G,
+          padding: '8px 12px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(0,230,118,0.08)', border: '1px solid rgba(0,230,118,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span>{importSuccess}</span>
+          <button onClick={() => setImportSuccess('')} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 14 }}>×</button>
+        </div>
+      )}
 
       {/* Quick reference — collapsible hints accordion */}
       <HintsAccordion />
