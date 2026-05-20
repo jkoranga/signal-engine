@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, Component } from 'react'
 import { useSettings } from './hooks/useSettings.js'
 import TFScannerTab from './components/TFScannerTab.jsx'
-import DeltaScannerTab from './components/DeltaScannerTab.jsx'
 import SettingsTab from './components/SettingsTab.jsx'
 import PatternBuilderTab, { condFormula } from './components/PatternBuilder.jsx'
 import { onAuthChanged, checkConfigured } from './firebase.js'
@@ -18,7 +17,6 @@ export const TF_TABS = [
   { id: '1h',  label: '1h',  color: '#4dabf7', glow: 'rgba(77,171,247,0.3)'   },
   { id: '4h',  label: '4h',  color: '#9775fa', glow: 'rgba(151,117,250,0.3)'  },
   { id: '1d',  label: 'Day', color: '#f783ac', glow: 'rgba(247,131,172,0.3)'  },
-  { id: 'delta', label: '🔶', color: '#ff6b00', glow: 'rgba(255,107,0,0.3)', isDelta: true },
   { id: 'builder',  label: '🔧', color: 'var(--lime)', glow: 'var(--lime-dim)', isBuilder: true },
   { id: 'settings', label: 'settings', color: '#00b8d9', glow: 'rgba(0,184,217,0.3)', isSettings: true },
 ]
@@ -1047,7 +1045,7 @@ export default function App() {
       </header>
 
       <main className="content-scroll-v2">
-        {TF_TABS.filter(t => !t.isSettings && !t.isBuilder && !t.isDelta).map(tab => (
+        {TF_TABS.filter(t => !t.isSettings && !t.isBuilder).map(tab => (
           <div key={tab.id} style={{ display: activeTab===tab.id?'block':'none', height:'100%' }}>
             <ErrorBoundary>
               <TFScannerTab
@@ -1066,18 +1064,6 @@ export default function App() {
             </ErrorBoundary>
           </div>
         ))}
-        {/* Delta Exchange India — completely separate scanner */}
-        <div style={{ display: activeTab==='delta'?'block':'none', height:'100%' }}>
-          <ErrorBoundary>
-            <DeltaScannerTab
-              settings={settings}
-              update={update}
-              isActive={activeTab==='delta' && userTappedTabs.has('delta')}
-              onGoToPatterns={togglePatterns}
-              onAlertCount={c => handleAlertCount('delta', c)}
-            />
-          </ErrorBoundary>
-        </div>
         {activeTab === 'settings' && (
           <ErrorBoundary>
             <SettingsTab settings={settings} set={set} update={update} reset={reset}
@@ -1126,8 +1112,6 @@ export default function App() {
                   letterSpacing: '-1px',
                   display: 'block',
                 }}>P</span>
-              ) : tab.isDelta ? (
-                <span style={{ fontSize: 16, display: 'block', lineHeight: 1 }}>🔶</span>
               ) : (
                 <span className="bottom-tab-label">{tab.label}</span>
               )}
