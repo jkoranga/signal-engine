@@ -187,7 +187,8 @@ export function condFormula(c) {
       const sk = c.slopeSkip ?? 0
       const thresh = c.slopeNum ?? 0
       const s = thresh >= 0 ? '+' : ''
-      return `${windowLabel} Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
+      const skipStr = sk > 0 ? `,skip${sk}` : ''
+      return `${windowLabel} Slope(${lhsF},${n}${skipStr}) ${op} ${s}${thresh}%`
     }
     return `${windowLabel} ${lhsF} ${op} ?`
   }
@@ -213,7 +214,8 @@ export function condFormula(c) {
     const sk = c.slopeSkip ?? 0
     const thresh = c.slopeNum ?? 0
     const s = thresh >= 0 ? '+' : ''
-    return `Slope(${lhsF},${n},skip${sk}) ${op} ${s}${thresh}%`
+    const skipStr = sk > 0 ? `,skip${sk}` : ''
+    return `Slope(${lhs},${n}${skipStr}) ${op} ${s}${thresh}%`
   }
   return `${lhs} ${op} ?`
 }
@@ -249,7 +251,8 @@ export function blankPattern() {
 
 // ── Compile pattern → logic(candles) ─────────────────────────────────────────
 export function compilePattern(pattern) {
-  return function logic(candles) {
+  // ── Core evaluator — returns true/false/null for a given candle array ─────
+  function evalCore(candles) {
     if (!candles || candles.length < 5) return null
     const len = candles.length
 
@@ -261,7 +264,7 @@ export function compilePattern(pattern) {
       if (!candle) return null
       const f = FIELD_MAP[fieldId]
       if (!f) return null
-      // changePct: (close[i] / close[i-1] - 1) * 100
+      // changePct: (close[i] / close[i-1] - 1) × 100
       if (f.needsPrev) {
         if (fieldId === 'changePct') {
           const prevIdx = (candleIdx ?? (len - 1)) - 1
@@ -461,16 +464,43 @@ export function compilePattern(pattern) {
       if (r == null) return null
       acc = segments[s - 1].joinAfter === 'OR' ? acc || r : acc && r
     }
-    if (!acc) return null
+    return acc === true ? true : null
+  }
 
+  // ── Public logic function — runs pattern + computes historical accuracy ────
+  return function logic(candles) {
+    if (!evalCore(candles)) return null
+
+    const len  = candles.length
     const curr = candles[len - 1]
     const prev = candles[len - 2] || curr
-    const lo = Math.min(curr.low, prev.low)
-    const hi = Math.max(curr.high, prev.high)
+    const lo   = Math.min(curr.low, prev.low)
+    const hi   = Math.max(curr.high, prev.high)
     const gainPct = pattern.side === 'bull'
       ? ((curr.close - lo) / lo * 100).toFixed(2)
       : ((hi - curr.close) / curr.close * 100).toFixed(2)
 
+    // ── Historical accuracy: backtest last LOOKBACK bars ────────────────────
+    // For each past bar, check if pattern fired and if the trade was profitable
+    const FORWARD  = 3   // candles ahead to measure outcome
+    const LOOKBACK = 30  // how far back to sample
+    let sigCount = 0, winCount = 0
+    const start = Math.max(10, len - LOOKBACK - FORWARD)
+    for (let ei = start; ei < len - FORWARD; ei++) {
+      const slice = candles.slice(0, ei + 1)
+      if (evalCore(slice) === true) {
+        sigCount++
+        const entry = candles[ei].close
+        const exit  = candles[ei + FORWARD].close
+        const won   = pattern.side === 'bull' ? exit > entry : exit < entry
+        if (won) winCount++
+      }
+    }
+    const accuracy = sigCount > 0
+      ? { signals: sigCount, wins: winCount, pct: Math.round(winCount / sigCount * 100) }
+      : null
+
+    const active = pattern.conditions.filter(c => c.enabled)
     return {
       candleCount: 5, gainPct,
       highestClose: curr.close, lowestOpen: curr.open,
@@ -480,6 +510,7 @@ export function compilePattern(pattern) {
       }),
       run: candles.slice(len - 8, len),
       ema9: curr.ema9, ema20: curr.ema20, rsi: curr.rsi,
+      accuracy,
     }
   }
 }

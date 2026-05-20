@@ -112,6 +112,18 @@ function AlertCard({ alert, onDismiss, onTap, resultFilter }) {
           </div>
         ))}
       </div>
+      {alert.details.accuracy && (() => {
+        const { pct, wins, signals } = alert.details.accuracy
+        const accCol = pct >= 70 ? 'var(--green)' : pct >= 50 ? '#ffa000' : 'var(--red)'
+        return (
+          <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 9px',borderRadius:8,marginBottom:8,
+            background:'rgba(0,0,0,0.2)',border:`1px solid ${accCol}44`}}>
+            <span style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',fontWeight:700,letterSpacing:'.05em'}}>ACCURACY</span>
+            <span style={{fontFamily:'var(--mono)',fontWeight:900,fontSize:14,color:accCol}}>{pct}%</span>
+            <span style={{fontSize:9,fontFamily:'var(--mono)',color:'var(--text3)',marginLeft:2}}>{wins}/{signals} wins · last 30 bars</span>
+          </div>
+        )
+      })()}
       {(alert.details.ema20||alert.details.ema40||alert.details.rsi!=null)&&(
         <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:6}}>
           {alert.details.ema20&&<div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 8px',borderRadius:6,background:'rgba(0,210,80,0.07)',border:'1px solid rgba(0,210,80,0.25)'}}><span style={{fontSize:10,color:'#00e676',fontFamily:'var(--mono)',fontWeight:700}}>EMA20</span><span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text)',fontWeight:700}}>{fmt(alert.details.ema20)}</span></div>}
@@ -191,6 +203,7 @@ function DetailSheet({ alert, onClose }) {
             [isBull?'Gain':'Drop',`${isBull?'+':'-'}${alert.details.gainPct}%`],
             ['Entry',fmt(alert.details.lowestOpen)],
             ['Close',fmt(alert.details.highestClose)],
+            ...(alert.details.accuracy ? [['Accuracy',`${alert.details.accuracy.pct}%  (${alert.details.accuracy.wins}/${alert.details.accuracy.signals})`]] : []),
             ...(alert.ticker?[['24h Vol',fmtVol(alert.ticker.volume)],['24h%',`${alert.ticker.priceChangePercent>0?'+':''}${alert.ticker.priceChangePercent?.toFixed(2)}%`]]:[]),
           ].map(([l,v])=>(
             <div key={l} style={{background:'var(--bg2)',borderRadius:8,padding:'9px 11px'}}>
