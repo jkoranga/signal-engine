@@ -43,12 +43,18 @@ export default function DeltaScannerTab({ settings, update, isActive, onGoToPatt
   const cacheRef    = useRef({})   // candle cache
   const idRef       = useRef(0)
 
+  const [symFallback, setSymFallback] = useState(false)
+
   // ── Load Delta symbols once on mount ────────────────────────────────────────
   useEffect(() => {
     setLoadingSyms(true)
     fetchDeltaSymbols().then(syms => {
       setSymbols(syms)
       setSymFailed(syms.length === 0)
+      // If we got symbols but they all have volume=0 it means fallback was used
+      setSymFallback(syms.length > 0 && syms.every(s => s.volume === 0))
+    }).catch(() => {
+      setSymFailed(true)
     }).finally(() => setLoadingSyms(false))
   }, [])
 
@@ -236,7 +242,13 @@ export default function DeltaScannerTab({ settings, update, isActive, onGoToPatt
             <div>
               <div style={{ fontWeight: 900, fontSize: 14, color: DELTA_COLOR }}>Delta Exchange India</div>
               <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 1 }}>
-                {loadingSyms ? 'Loading symbols…' : symFailed ? '⚠ Symbol load failed' : `${symbols.length} perpetuals · USDT`}
+                {loadingSyms
+                  ? 'Loading symbols…'
+                  : symFailed
+                    ? '⚠ Symbol load failed'
+                    : symFallback
+                      ? `⚠ Using ${symbols.length} fallback symbols (proxy unavailable)`
+                      : `${symbols.length} perpetuals · USDT · Delta India`}
               </div>
             </div>
           </div>

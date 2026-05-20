@@ -1,5 +1,9 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "rewrites": [
+    { "source": "/api/delta-symbols", "destination": "/api/delta-symbols" },
+    { "source": "/api/delta-candles", "destination": "/api/delta-candles" },
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

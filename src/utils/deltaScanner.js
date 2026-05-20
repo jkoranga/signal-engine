@@ -1,73 +1,46 @@
-// ─── Delta Exchange India — Candle + Symbol Fetcher ───────────────────────────
-// Completely separate from Binance scanner.
-// Delta API docs: https://docs.delta.exchange
-// Base URL: https://api.india.delta.exchange
+// ─── Delta Exchange India — via Vercel serverless proxy ───────────────────────
+// Delta's API blocks direct browser requests (CORS + host allowlist).
+// All calls go through /api/delta-symbols and /api/delta-candles
+// which are Vercel serverless functions that proxy to Delta server-side.
 
-const DELTA_BASE = 'https://api.india.delta.exchange'
-const DELTA_TIMEOUT = 10000
-
-// Delta interval map → their format
-const DELTA_INTERVAL_MAP = {
-  '1m':  '1m',
-  '3m':  '3m',
-  '5m':  '5m',
-  '15m': '15m',
-  '30m': '30m',
-  '1h':  '1h',
-  '4h':  '4h',
-  '1d':  '1d',
+const DELTA_RES_MAP = {
+  '1m':'1','3m':'3','5m':'5','15m':'15','30m':'30',
+  '1h':'60','4h':'240','1d':'D',
 }
 
-// ── Fetch all active USDT perpetual products from Delta India ─────────────────
+// ── Fetch all active USDT perpetuals via proxy ────────────────────────────────
 export async function fetchDeltaSymbols() {
   try {
-    const res = await fetch(
-      `${DELTA_BASE}/v2/products?contract_types=perpetual_futures&states=live&page_size=200`,
-      { signal: AbortSignal.timeout(DELTA_TIMEOUT) }
-    )
-    if (!res.ok) throw new Error(`Delta API ${res.status}`)
+    const res = await fetch('/api/delta-symbols', {
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) throw new Error(`Proxy error ${res.status}`)
     const data = await res.json()
-    const products = data.result || []
-    return products
-      .filter(p =>
-        p.quoting_asset?.symbol === 'USDT' &&
-        p.state === 'live' &&
-        p.contract_type === 'perpetual_futures'
-      )
-      .map(p => ({
-        symbol:  p.symbol,           // e.g. "BTCUSDT"
-        name:    p.underlying_asset?.symbol || p.symbol,
-        markPrice: parseFloat(p.mark_price || 0),
-        volume:  parseFloat(p.volume || 0),
-      }))
-      .sort((a, b) => b.volume - a.volume)
+    if (data.error) throw new Error(data.error)
+    return data.products || []
   } catch (e) {
     console.warn('[Delta] fetchDeltaSymbols failed:', e.message)
-    return []
+    // Return hardcoded top Delta India symbols as fallback
+    return DELTA_FALLBACK_SYMBOLS
   }
 }
 
-// ── Fetch OHLCV candles from Delta India ──────────────────────────────────────
-// Delta endpoint: GET /v2/history/candles?symbol=BTCUSDT&resolution=15&start=...&end=...
-// resolution is in minutes for Delta (15 = 15m, 60 = 1h, 240 = 4h, D = 1d)
-const DELTA_RES_MAP = {
-  '1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30',
-  '1h': '60', '4h': '240', '1d': 'D',
-}
-
+// ── Fetch OHLCV candles via proxy ─────────────────────────────────────────────
 export async function fetchDeltaCandles(symbol, interval = '15m', limit = 60) {
   const resolution = DELTA_RES_MAP[interval] || '15'
-  const resMs = intervalToMs(interval)
-  const now   = Math.floor(Date.now() / 1000)
-  const start = now - Math.ceil(resMs / 1000) * (limit + 5)
+  const resMs  = intervalToMs(interval)
+  const now    = Math.floor(Date.now() / 1000)
+  const start  = now - Math.ceil(resMs / 1000) * (limit + 5)
 
   try {
-    const url = `${DELTA_BASE}/v2/history/candles?symbol=${symbol}&resolution=${resolution}&start=${start}&end=${now}`
-    const res = await fetch(url, { signal: AbortSignal.timeout(DELTA_TIMEOUT) })
-    if (!res.ok) throw new Error(`Delta candles ${res.status}`)
+    const url = `/api/delta-candles?symbol=${symbol}&resolution=${resolution}&start=${start}&end=${now}`
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) })
+    if (!res.ok) throw new Error(`Proxy error ${res.status}`)
     const data = await res.json()
+    if (data.error) throw new Error(data.error)
+
     const raw = data.result || []
-    if (raw.length < 3) throw new Error('Too few candles')
+    if (raw.length < 3) return null
 
     const candles = raw
       .map(c => ({
@@ -81,7 +54,7 @@ export async function fetchDeltaCandles(symbol, interval = '15m', limit = 60) {
       .sort((a, b) => a.time - b.time)
       .slice(-limit)
 
-    // Attach same indicators as Binance scanner so patterns are compatible
+    // Attach all indicators — same as Binance scanner for pattern compatibility
     attachEMAn(candles,   5, 'ema5')
     attachEMAn(candles,   9, 'ema9')
     attachEMAn(candles,  15, 'ema15')
@@ -110,7 +83,7 @@ export async function fetchDeltaCandles(symbol, interval = '15m', limit = 60) {
   }
 }
 
-// ─── Indicator functions (same as Binance scanner) ───────────────────────────
+// ─── Indicators ───────────────────────────────────────────────────────────────
 function attachEMAn(candles, period, key) {
   const k = 2 / (period + 1)
   let ema = null
@@ -130,10 +103,8 @@ function attachRSI(candles, period = 14) {
   for (let i = period; i < candles.length; i++) {
     if (i > period) {
       const diff = candles[i].close - candles[i - 1].close
-      const gain = diff > 0 ? diff : 0
-      const loss = diff < 0 ? -diff : 0
-      avgGain = (avgGain * (period - 1) + gain) / period
-      avgLoss = (avgLoss * (period - 1) + loss) / period
+      avgGain = (avgGain * (period - 1) + Math.max(0, diff))  / period
+      avgLoss = (avgLoss * (period - 1) + Math.max(0, -diff)) / period
     }
     const rs = avgLoss === 0 ? 100 : avgGain / avgLoss
     candles[i].rsi14 = 100 - 100 / (1 + rs)
@@ -143,32 +114,42 @@ function attachRSI(candles, period = 14) {
 function attachDMI(candles, period = 14) {
   for (let i = 1; i < candles.length; i++) {
     const curr = candles[i], prev = candles[i - 1]
-    const upMove   = curr.high - prev.high
-    const downMove = prev.low  - curr.low
-    curr._pdm = upMove > downMove && upMove > 0 ? upMove : 0
-    curr._ndm = downMove > upMove && downMove > 0 ? downMove : 0
-    const hl = curr.high - curr.low
-    const hc = Math.abs(curr.high - prev.close)
-    const lc = Math.abs(curr.low  - prev.close)
-    curr._tr = Math.max(hl, hc, lc)
+    const upMove = curr.high - prev.high
+    const dnMove = prev.low  - curr.low
+    curr._pdm = upMove > dnMove && upMove > 0 ? upMove : 0
+    curr._ndm = dnMove > upMove && dnMove > 0 ? dnMove : 0
+    curr._tr  = Math.max(curr.high - curr.low, Math.abs(curr.high - prev.close), Math.abs(curr.low - prev.close))
   }
-  let atr = 0, pdi = 0, ndi = 0, dx = 0
+  let atr = 0, pdi = 0, ndi = 0
   for (let i = 1; i < candles.length; i++) {
     const c = candles[i]
-    atr = i < period ? atr + c._tr : (atr * (period - 1) + c._tr) / period
-    pdi = i < period ? pdi + c._pdm : (pdi * (period - 1) + c._pdm) / period
-    ndi = i < period ? ndi + c._ndm : (ndi * (period - 1) + c._ndm) / period
+    atr = i < period ? atr + c._tr  : (atr * (period-1) + c._tr)  / period
+    pdi = i < period ? pdi + c._pdm : (pdi * (period-1) + c._pdm) / period
+    ndi = i < period ? ndi + c._ndm : (ndi * (period-1) + c._ndm) / period
     if (atr > 0) {
-      const p = pdi / atr * 100, n = ndi / atr * 100
-      const sum = p + n
+      const p = pdi/atr*100, n = ndi/atr*100
       c.dmi_plus = p; c.dmi_minus = n
-      c.adx = sum > 0 ? Math.abs(p - n) / sum * 100 : 0
+      c.adx = (p+n) > 0 ? Math.abs(p-n)/(p+n)*100 : 0
     }
   }
 }
 
 function intervalToMs(tf) {
-  const map = { '1m':60000,'3m':180000,'5m':300000,'15m':900000,
-    '30m':1800000,'1h':3600000,'4h':14400000,'1d':86400000 }
-  return map[tf] || 900000
+  return {'1m':60000,'3m':180000,'5m':300000,'15m':900000,
+    '30m':1800000,'1h':3600000,'4h':14400000,'1d':86400000}[tf] || 900000
 }
+
+// ─── Fallback symbol list if proxy also fails ─────────────────────────────────
+// Top Delta Exchange India USDT perpetuals by volume (manually curated)
+export const DELTA_FALLBACK_SYMBOLS = [
+  'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT',
+  'ADAUSDT','DOGEUSDT','AVAXUSDT','MATICUSDT','DOTUSDT',
+  'LINKUSDT','LTCUSDT','NEARUSDT','APTUSDT','ARBUSDT',
+  'OPUSDT','INJUSDT','SUIUSDT','SHIBUSDT','TRXUSDT',
+  'FETUSDT','WIFUSDT','PEPEUSDT','TIAUSDT','JUPUSDT',
+  'ORDIUSDT','BOMEUSDT','MEMEUSDT','NOTUSDT','EIGENUSDT',
+  'AAVEUSDT','LDOUSDT','STXUSDT','GRTUSDT','IMXUSDT',
+  'ENAUSDT','PYTHUSDT','SEIUSDT','HBARUSDT','ALGOUSDT',
+  'XLMUSDT','VETUSDT','FILUSDT','ICPUSDT','AXSUSDT',
+  'SANDUSDT','MANAUSDT','KAVAUSDT','ATOMUSDT','UNIUSDT',
+].map(symbol => ({ symbol, name: symbol.replace('USDT',''), markPrice: 0, volume: 0 }))
