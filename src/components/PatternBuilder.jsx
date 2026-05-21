@@ -1905,13 +1905,31 @@ export default function PatternBuilderTab({ settings, update }) {
   const [importPopup, setImportPopup] = useState(false)
   const importInputRef = React.useRef(null)
 
-  function exportPatterns() {
+  // ── Selection state for bulk export ──────────────────────────────────────
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [exportPopup, setExportPopup] = useState(false)
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  function selectAll() { setSelectedIds(new Set(patterns.map(p => p.id))) }
+  function selectNone() { setSelectedIds(new Set()) }
+  function exitSelectionMode() { setSelectionMode(false); setSelectedIds(new Set()) }
+
+  // ── Export helpers ────────────────────────────────────────────────────────
+  // Export all patterns as one combined JSON (original behaviour)
+  function exportAllCombined(pats) {
     const data = {
       _type: 'signal_engine_patterns',
       _version: 1,
       _exportedAt: new Date().toISOString(),
-      _count: patterns.length,
-      patterns,
+      _count: pats.length,
+      patterns: pats,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url  = URL.createObjectURL(blob)
@@ -1920,6 +1938,38 @@ export default function PatternBuilderTab({ settings, update }) {
     a.download = `patterns_backup_${new Date().toISOString().slice(0,10)}.json`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Export each pattern as its own .json file, named after the pattern
+  function exportIndividual(pats) {
+    const safeName = str => str.replace(/[^a-z0-9_\-]/gi, '_').replace(/_+/g, '_').slice(0, 60) || 'pattern'
+    pats.forEach(p => {
+      const data = {
+        _type: 'signal_engine_patterns',
+        _version: 1,
+        _exportedAt: new Date().toISOString(),
+        _count: 1,
+        patterns: [p],
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${safeName(p.name || 'pattern')}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+  }
+
+  // The main "Export" button click — if nothing selected, export all combined
+  function exportPatterns() {
+    if (selectionMode) {
+      const chosen = patterns.filter(p => selectedIds.has(p.id))
+      if (chosen.length === 0) return
+      setExportPopup(true)
+    } else {
+      exportAllCombined(patterns)
+    }
   }
 
   function handleImportFile(e) {
@@ -1968,6 +2018,90 @@ export default function PatternBuilderTab({ settings, update }) {
 
   return (
     <div style={{ padding: '14px 10px 90px', maxWidth: 620, margin: '0 auto' }}>
+
+      {/* ── Export mode popup ── */}
+      {exportPopup && (() => {
+        const chosen = patterns.filter(p => selectedIds.has(p.id))
+        return (
+          <>
+            <div onClick={() => setExportPopup(false)} style={{
+              position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(0,0,0,0.65)',
+              backdropFilter: 'blur(4px)',
+            }} />
+            <div style={{
+              position: 'fixed', left: '50%', top: '50%',
+              transform: 'translate(-50%,-50%)',
+              zIndex: 300, width: 'min(340px, 93vw)',
+              borderRadius: 16, padding: '22px 18px',
+              background: 'var(--bg1)',
+              border: '1.5px solid rgba(0,230,118,0.35)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+            }}>
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📤</div>
+                <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--text)' }}>
+                  Export {chosen.length} Pattern{chosen.length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 5, lineHeight: 1.7 }}>
+                  Choose how to export the selected patterns.
+                </div>
+              </div>
+              <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />
+
+              {/* Preview list */}
+              <div style={{ marginBottom: 14, maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {chosen.map(p => (
+                  <div key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '5px 9px', borderRadius: 7,
+                    background: 'var(--bg2)', border: '1px solid var(--border)',
+                    fontSize: 11, fontFamily: 'var(--mono)',
+                  }}>
+                    <span style={{ fontSize: 14 }}>{p.icon}</span>
+                    <span style={{ flex: 1, color: p.side === 'bull' ? G : R, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                    <span style={{ color: 'var(--text3)', fontSize: 9 }}>{p.side.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  onClick={() => { exportAllCombined(chosen); setExportPopup(false); exitSelectionMode() }}
+                  style={{
+                    width: '100%', padding: '11px', borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                    border: '1.5px solid rgba(0,230,118,0.5)',
+                    background: 'rgba(0,230,118,0.1)', color: G,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  📦 Combined JSON <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text3)' }}>— one file, all patterns</span>
+                </button>
+                <button
+                  onClick={() => { exportIndividual(chosen); setExportPopup(false); exitSelectionMode() }}
+                  style={{
+                    width: '100%', padding: '11px', borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 12,
+                    border: '1.5px solid rgba(77,171,247,0.5)',
+                    background: 'rgba(77,171,247,0.08)', color: BLU,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  📄 Individual Files <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text3)' }}>— one .json per pattern</span>
+                </button>
+                <button
+                  onClick={() => setExportPopup(false)}
+                  style={{
+                    width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
+                    border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+                  }}
+                >Cancel</button>
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {/* Import popup modal */}
       {importPopup && (
@@ -2043,21 +2177,37 @@ export default function PatternBuilderTab({ settings, update }) {
             background: 'rgba(0,230,118,0.1)', color: G, border: '1px solid rgba(0,230,118,0.3)' }}>🟢 {bull}</span>
           <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700, padding: '3px 9px', borderRadius: 6,
             background: 'rgba(255,60,80,0.1)', color: R, border: '1px solid rgba(255,60,80,0.3)' }}>🔴 {bear}</span>
+          {/* Select mode toggle */}
+          {patterns.length > 0 && (
+            <button
+              onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+              title={selectionMode ? 'Exit selection mode' : 'Select patterns to export'}
+              style={{
+                padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
+                fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+                border: `1px solid ${selectionMode ? 'rgba(255,160,0,0.6)' : 'rgba(255,255,255,0.15)'}`,
+                background: selectionMode ? 'rgba(255,160,0,0.12)' : 'rgba(255,255,255,0.04)',
+                color: selectionMode ? AMB : 'var(--text3)',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >{selectionMode ? '✕ Cancel' : '☑ Select'}</button>
+          )}
           {/* Export button */}
           <button
             onClick={exportPatterns}
-            disabled={patterns.length === 0}
-            title="Export all patterns as JSON backup"
+            disabled={patterns.length === 0 || (selectionMode && selectedIds.size === 0)}
+            title={selectionMode ? `Export ${selectedIds.size} selected pattern(s)` : 'Export all patterns as JSON backup'}
             style={{
-              padding: '4px 10px', borderRadius: 7, cursor: patterns.length === 0 ? 'not-allowed' : 'pointer',
+              padding: '4px 10px', borderRadius: 7,
+              cursor: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'not-allowed' : 'pointer',
               fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
               border: '1px solid rgba(0,230,118,0.4)',
-              background: patterns.length === 0 ? 'transparent' : 'rgba(0,230,118,0.08)',
-              color: patterns.length === 0 ? 'var(--text3)' : G,
-              opacity: patterns.length === 0 ? 0.4 : 1,
+              background: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'transparent' : 'rgba(0,230,118,0.08)',
+              color: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'var(--text3)' : G,
+              opacity: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 0.4 : 1,
               display: 'flex', alignItems: 'center', gap: 4,
             }}
-          >📤 Export</button>
+          >📤 {selectionMode && selectedIds.size > 0 ? `Export (${selectedIds.size})` : 'Export'}</button>
           {/* Import button */}
           <button
             onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
@@ -2072,6 +2222,38 @@ export default function PatternBuilderTab({ settings, update }) {
           >📥 Import</button>
         </div>
       </div>
+
+      {/* Selection mode toolbar */}
+      {selectionMode && patterns.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+          padding: '8px 12px', borderRadius: 9,
+          background: 'rgba(255,160,0,0.06)', border: '1px solid rgba(255,160,0,0.25)',
+        }}>
+          <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: AMB, fontWeight: 700 }}>
+            {selectedIds.size === 0 ? 'Select patterns to export' : `${selectedIds.size} selected`}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={selectAll}
+            style={{
+              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+              padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+              border: '1px solid rgba(255,160,0,0.35)', background: 'rgba(255,160,0,0.1)',
+              color: AMB,
+            }}
+          >All</button>
+          <button
+            onClick={selectNone}
+            style={{
+              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+              padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
+              border: '1px solid var(--border)', background: 'var(--bg2)',
+              color: 'var(--text3)',
+            }}
+          >None</button>
+        </div>
+      )}
 
       {/* Import success toast */}
       {importSuccess && (
@@ -2109,13 +2291,36 @@ export default function PatternBuilderTab({ settings, update }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
             {patterns.map((p, i) => (
-              <PatternEditor
-                key={p.id} pattern={p} defaultOpen={p.id === newId}
-                onChange={np => upd(i, np)} onDelete={() => del(i)}
-                onMirrorPattern={(name) => mirrorPattern(i, name)}
-                onCopyPattern={(name) => copyPattern(i, name)}
-                allPatternNames={patterns.map(x => x.name)}
-              />
+              <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                {/* Selection checkbox */}
+                {selectionMode && (
+                  <div
+                    onClick={() => toggleSelect(p.id)}
+                    style={{
+                      flexShrink: 0, marginTop: 12, width: 18, height: 18, borderRadius: 5,
+                      border: `2px solid ${selectedIds.has(p.id) ? AMB : 'var(--border)'}`,
+                      background: selectedIds.has(p.id) ? 'rgba(255,160,0,0.18)' : 'var(--bg2)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all .15s',
+                    }}
+                  >
+                    {selectedIds.has(p.id) && (
+                      <svg width="10" height="10" viewBox="0 0 8 8" fill="none">
+                        <polyline points="1,4 3.2,6.2 7,2" stroke={AMB} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <PatternEditor
+                    key={p.id} pattern={p} defaultOpen={p.id === newId}
+                    onChange={np => upd(i, np)} onDelete={() => del(i)}
+                    onMirrorPattern={(name) => mirrorPattern(i, name)}
+                    onCopyPattern={(name) => copyPattern(i, name)}
+                    allPatternNames={patterns.map(x => x.name)}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         </>
