@@ -1157,7 +1157,7 @@ function IconPicker({ value, onChange, color }) {
 }
 
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames }) {
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames, selectionMode, isSelected, onToggleSelect, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -1452,6 +1452,49 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
             : 'transparent',
         }}
       >
+        {/* ── Reorder / Select controls injected into header ── */}
+        {selectionMode ? (
+          <div
+            onClick={e => { e.stopPropagation(); onToggleSelect && onToggleSelect() }}
+            style={{
+              width: 22, height: 22, borderRadius: 5, flexShrink: 0,
+              border: `2px solid ${isSelected ? '#ffa000' : 'rgba(255,255,255,0.3)'}`,
+              background: isSelected ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.06)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all .15s',
+            }}
+          >
+            {isSelected && (
+              <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
+                <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="#ffa000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}
+               onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onMoveUp && onMoveUp()}
+              style={{
+                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
+                background: isFirst ? 'transparent' : 'rgba(255,255,255,0.1)',
+                cursor: isFirst ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: isFirst ? 0.15 : 1,
+              }}
+            ><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↑</span></button>
+            <button
+              onClick={() => onMoveDown && onMoveDown()}
+              style={{
+                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
+                background: isLast ? 'transparent' : 'rgba(255,255,255,0.1)',
+                cursor: isLast ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: isLast ? 0.15 : 1,
+              }}
+            ><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↓</span></button>
+          </div>
+        )}
         <span style={{ fontSize: 22 }}>{pattern.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: pattern.enabled ? color : 'var(--text2)',
@@ -2356,83 +2399,21 @@ export default function PatternBuilderTab({ settings, update }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
             {patterns.map((p, i) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-
-                {/* ── Left gutter ── */}
-                <div style={{
-                  flexShrink: 0, width: 30,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
-                  gap: 4, paddingTop: 8,
-                }}>
-                  {selectionMode ? (
-                    /* Checkbox */
-                    <div
-                      onClick={() => toggleSelect(p.id)}
-                      style={{
-                        width: 22, height: 22, borderRadius: 6, marginTop: 4,
-                        border: `2px solid ${isSelected(p.id) ? AMB : 'rgba(255,255,255,0.25)'}`,
-                        background: isSelected(p.id) ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.05)',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all .15s',
-                      }}
-                    >
-                      {isSelected(p.id) && (
-                        <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
-                          <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke={AMB} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      )}
-                    </div>
-                  ) : (
-                    /* ▲ index ▼ */
-                    <>
-                      <button
-                        onClick={() => movePattern(i, -1)}
-                        title="Move up"
-                        style={{
-                          width: 26, height: 22, borderRadius: 5, padding: 0,
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          background: 'rgba(255,255,255,0.08)',
-                          cursor: i === 0 ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: i === 0 ? 0.18 : 1,
-                        }}
-                      >
-                        <span style={{ fontSize: 14, lineHeight: 1, color: '#fff', fontWeight: 700 }}>↑</span>
-                      </button>
-
-                      <span style={{
-                        fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
-                        color: 'var(--text3)', lineHeight: 1, userSelect: 'none',
-                      }}>{i + 1}</span>
-
-                      <button
-                        onClick={() => movePattern(i, +1)}
-                        title="Move down"
-                        style={{
-                          width: 26, height: 22, borderRadius: 5, padding: 0,
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          background: 'rgba(255,255,255,0.08)',
-                          cursor: i === patterns.length - 1 ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: i === patterns.length - 1 ? 0.18 : 1,
-                        }}
-                      >
-                        <span style={{ fontSize: 14, lineHeight: 1, color: '#fff', fontWeight: 700 }}>↓</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* ── Pattern card ── */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div key={p.id}>
                   <PatternEditor
                     key={p.id} pattern={p} defaultOpen={p.id === newId}
                     onChange={np => upd(i, np)} onDelete={() => del(i)}
                     onMirrorPattern={(name) => mirrorPattern(i, name)}
                     onCopyPattern={(name) => copyPattern(i, name)}
                     allPatternNames={patterns.map(x => x.name)}
+                    selectionMode={selectionMode}
+                    isSelected={isSelected(p.id)}
+                    onToggleSelect={() => toggleSelect(p.id)}
+                    onMoveUp={() => movePattern(i, -1)}
+                    onMoveDown={() => movePattern(i, +1)}
+                    isFirst={i === 0}
+                    isLast={i === patterns.length - 1}
                   />
-                </div>
               </div>
             ))}
           </div>
