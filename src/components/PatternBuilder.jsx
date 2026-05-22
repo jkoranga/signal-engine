@@ -84,6 +84,54 @@ const ICON_CATEGORIES = [
   { label: '🎰 Fun',      icons: ['🎰','🎲','🎯','🃏','🎪','🎭','🎬','🎵','🎸','🥂','🍀','🦋'] },
 ]
 
+// ── Built-in example patterns ────────────────────────────────────────────────
+const EXAMPLE_PATTERNS = [
+  {
+    id: 'example_1h_ema20_slope_bull',
+    name: '[1h] EMA20 Slope ≥ +2%',
+    side: 'bull', icon: '📐',
+    tfs: ['1h'],
+    enabled: true,
+    createdAt: Date.now(),
+    conditions: [
+      {
+        id: 'ex_slope_c1',
+        enabled: true, joinNext: 'AND',
+        groupId: null, label: 'EMA20 slope up ≥ 2% over 10 candles',
+        lhsField: 'ema20', lhsOffset: 0,
+        op: '>=',
+        rhsMode: 'slope',
+        rhsField: 'ema20', rhsOffset: 0,
+        rhsNum: 0, rhsMult: 1, rhsPct: 0,
+        slopeLen: 10, slopeSkip: 0, slopeNum: 2,
+        rangeCheck: false, rangeFrom: -1, rangeTo: -5, rangeMode: 'all',
+      }
+    ],
+  },
+  {
+    id: 'example_1h_ema20_slope_bear',
+    name: '[1h] EMA20 Slope ≤ −2%',
+    side: 'bear', icon: '📐',
+    tfs: ['1h'],
+    enabled: true,
+    createdAt: Date.now(),
+    conditions: [
+      {
+        id: 'ex_slope_c2',
+        enabled: true, joinNext: 'AND',
+        groupId: null, label: 'EMA20 slope down ≤ −2% over 10 candles',
+        lhsField: 'ema20', lhsOffset: 0,
+        op: '<=',
+        rhsMode: 'slope',
+        rhsField: 'ema20', rhsOffset: 0,
+        rhsNum: 0, rhsMult: 1, rhsPct: 0,
+        slopeLen: 10, slopeSkip: 0, slopeNum: -2,
+        rangeCheck: false, rangeFrom: -1, rangeTo: -5, rangeMode: 'all',
+      }
+    ],
+  },
+]
+
 const G = 'var(--green)'
 const R = 'var(--red)'
 const A = '#b388ff'
@@ -1454,8 +1502,8 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
           onClick={() => pattern.locked ? setLockPopup(true) : setOpen(o => !o)}
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 4px', cursor: 'pointer' }}
         >
-          {/* Reorder or checkbox */}
-          {selectionMode ? (
+          {/* Reorder or checkbox — hidden when pattern is open/expanded */}
+          {!open && (selectionMode ? (
             <div
               onClick={e => { e.stopPropagation(); onToggleSelect && onToggleSelect() }}
               style={{
@@ -1490,7 +1538,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
                 opacity: isLast ? 0.15 : 1,
               }}><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↓</span></button>
             </div>
-          )}
+          ))}
 
           {/* Icon */}
           <span style={{ fontSize: 22, flexShrink: 0 }}>{pattern.icon}</span>
@@ -1530,7 +1578,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
         {/* Row 2 — action buttons, always visible, stop propagation */}
         <div
           onClick={e => e.stopPropagation()}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px 8px', paddingLeft: 64 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px 8px', paddingLeft: open ? 12 : 64 }}
         >
           {/* Lock */}
           <button
@@ -1960,7 +2008,18 @@ export default function PatternBuilderTab({ settings, update }) {
   const [importError, setImportError] = useState('')
   const [importSuccess, setImportSuccess] = useState('')
   const [importPopup, setImportPopup] = useState(false)
+  const [examplesPopup, setExamplesPopup] = useState(false)
   const importInputRef = React.useRef(null)
+
+  function loadExample(ex) {
+    const fresh = { ...ex, id: `custom_${uid()}`, createdAt: Date.now(),
+      conditions: ex.conditions.map(c => ({ ...c, id: uid() })) }
+    const exists = patterns.some(p => p.name.toLowerCase() === fresh.name.toLowerCase())
+    if (exists) { setImportError(`"${fresh.name}" already exists`); return }
+    savePatterns([...patterns, fresh])
+    setImportSuccess(`✅ "${fresh.name}" added`)
+    setExamplesPopup(false)
+  }
 
   // ── Selection state for bulk export ──────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false)
@@ -2180,6 +2239,70 @@ export default function PatternBuilderTab({ settings, update }) {
         )
       })()}
 
+      {/* Examples popup */}
+      {examplesPopup && (
+        <>
+          <div onClick={() => setExamplesPopup(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+          }} />
+          <div style={{
+            position: 'fixed', left: '50%', top: '50%',
+            transform: 'translate(-50%,-50%)',
+            zIndex: 300, width: 'min(360px, 93vw)',
+            borderRadius: 16, padding: '20px 16px',
+            background: 'var(--bg1)',
+            border: '1.5px solid rgba(77,171,247,0.4)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>📐</div>
+              <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--text)' }}>Example Patterns</div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 4, lineHeight: 1.6 }}>
+                Tap any example to add it to your patterns
+              </div>
+            </div>
+            <div style={{ height: 1, background: 'var(--border)', marginBottom: 12 }} />
+            {importError && (
+              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)',
+                padding: '6px 10px', borderRadius: 7, marginBottom: 10,
+                background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.3)',
+              }}>⚠ {importError}</div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {EXAMPLE_PATTERNS.map(ex => (
+                <button key={ex.id} onClick={() => loadExample(ex)} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                  border: `1px solid ${ex.side === 'bull' ? 'rgba(0,230,118,0.3)' : 'rgba(255,60,80,0.3)'}`,
+                  background: ex.side === 'bull' ? 'rgba(0,230,118,0.05)' : 'rgba(255,60,80,0.05)',
+                }}>
+                  <span style={{ fontSize: 22, flexShrink: 0 }}>{ex.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 12, fontFamily: 'var(--mono)',
+                      color: ex.side === 'bull' ? G : R, marginBottom: 2 }}>{ex.name}</div>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', lineHeight: 1.5 }}>
+                      {ex.tfs.join(' ')} · {ex.side.toUpperCase()} · {ex.conditions.length} condition
+                      {ex.conditions.map(c => (
+                        <span key={c.id} style={{ display: 'block', marginTop: 2, color: 'var(--text2)' }}>
+                          {FIELD_MAP[c.lhsField]?.short || c.lhsField} slope {c.op} {c.slopeNum}% over {c.slopeLen} candles
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 16, color: ex.side === 'bull' ? G : R, flexShrink: 0 }}>+</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { setExamplesPopup(false); setImportError('') }} style={{
+              width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer',
+              fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
+              border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+            }}>Close</button>
+          </div>
+        </>
+      )}
+
       {/* Import popup modal */}
       {importPopup && (
         <>
@@ -2285,6 +2408,18 @@ export default function PatternBuilderTab({ settings, update }) {
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >📤 {selectionMode && selectedCnt > 0 ? `Export (${selectedCnt})` : 'Export'}</button>
+          {/* Examples button */}
+          <button
+            onClick={() => { setImportError(''); setExamplesPopup(true) }}
+            title="Browse example patterns"
+            style={{
+              padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
+              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+              border: '1px solid rgba(179,136,255,0.4)',
+              background: 'rgba(179,136,255,0.08)', color: '#b388ff',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >📐 Examples</button>
           {/* Import button */}
           <button
             onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
