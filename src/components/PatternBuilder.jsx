@@ -118,26 +118,40 @@ function groupColor(groupId) {
 // Mirror an operator (flip comparison direction)
 const MIRROR_OP = { '>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '≠': '≠' }
 
-// Flip High ↔ Low for bearish/bullish mirror (other fields stay same)
-const MIRROR_FIELD = { 'high': 'low', 'low': 'high' }
+// Flip High ↔ Low and LowerWick ↔ UpperWick for bearish/bullish mirror
+const MIRROR_FIELD = {
+  'high':      'low',
+  'low':       'high',
+  'lowerWick': 'upperWick',
+  'upperWick': 'lowerWick',
+}
 
 function mirrorCond(cond) {
+  const mirroredLhs = MIRROR_FIELD[cond.lhsField] ?? cond.lhsField
+  const mirroredRhs = MIRROR_FIELD[cond.rhsField] ?? cond.rhsField
+
+  // When a wick swaps to the opposite wick, the comparison direction stays the
+  // same and the ±% offset keeps its sign — both wicks are measured the same way.
+  // e.g.  LWick > Body +25%  mirrors to  UWick > Body +25%  (not UWick < Body -25%)
+  const wickSwap = cond.lhsField !== mirroredLhs &&
+    (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')
+
   // Invert multiplier: × 1.005 → × (1/1.005) = × 0.995
   const rhsMult = cond.rhsMult != null
     ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
     : cond.rhsMult
 
-  // Invert numeric thresholds: +0.25 → -0.25
-  const rhsNum  = cond.rhsNum  != null ? -parseFloat(cond.rhsNum)  : cond.rhsNum
-  const rhsPct  = cond.rhsPct  != null ? -parseFloat(cond.rhsPct)  : cond.rhsPct
-  const slopeNum = cond.slopeNum != null ? -parseFloat(cond.slopeNum) : cond.slopeNum
+  // Wick swap: keep sign.  Price/EMA/other mirror: invert.
+  const rhsNum   = cond.rhsNum   != null ? (wickSwap ?  parseFloat(cond.rhsNum)   : -parseFloat(cond.rhsNum))   : cond.rhsNum
+  const rhsPct   = cond.rhsPct   != null ? (wickSwap ?  parseFloat(cond.rhsPct)   : -parseFloat(cond.rhsPct))   : cond.rhsPct
+  const slopeNum = cond.slopeNum != null ? (wickSwap ?  parseFloat(cond.slopeNum) : -parseFloat(cond.slopeNum)) : cond.slopeNum
 
   return {
     ...cond,
     id: uid(),
-    op: MIRROR_OP[cond.op] ?? cond.op,
-    lhsField: MIRROR_FIELD[cond.lhsField] ?? cond.lhsField,
-    rhsField: MIRROR_FIELD[cond.rhsField] ?? cond.rhsField,
+    op: wickSwap ? cond.op : (MIRROR_OP[cond.op] ?? cond.op),
+    lhsField: mirroredLhs,
+    rhsField: mirroredRhs,
     rhsMult,
     rhsNum,
     rhsPct,
