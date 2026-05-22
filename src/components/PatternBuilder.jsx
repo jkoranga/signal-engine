@@ -1157,7 +1157,7 @@ function IconPicker({ value, onChange, color }) {
 }
 
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames }) {
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames, selectionMode, isSelected, onToggleSelect, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -1452,6 +1452,49 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
             : 'transparent',
         }}
       >
+        {/* ── Reorder / Select controls injected into header ── */}
+        {selectionMode ? (
+          <div
+            onClick={e => { e.stopPropagation(); onToggleSelect && onToggleSelect() }}
+            style={{
+              width: 22, height: 22, borderRadius: 5, flexShrink: 0,
+              border: `2px solid ${isSelected ? '#ffa000' : 'rgba(255,255,255,0.3)'}`,
+              background: isSelected ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.06)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all .15s',
+            }}
+          >
+            {isSelected && (
+              <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
+                <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="#ffa000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}
+               onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onMoveUp && onMoveUp()}
+              style={{
+                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
+                background: isFirst ? 'transparent' : 'rgba(255,255,255,0.1)',
+                cursor: isFirst ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: isFirst ? 0.15 : 1,
+              }}
+            ><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↑</span></button>
+            <button
+              onClick={() => onMoveDown && onMoveDown()}
+              style={{
+                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
+                background: isLast ? 'transparent' : 'rgba(255,255,255,0.1)',
+                cursor: isLast ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: isLast ? 0.15 : 1,
+              }}
+            ><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↓</span></button>
+          </div>
+        )}
         <span style={{ fontSize: 22 }}>{pattern.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: pattern.enabled ? color : 'var(--text2)',
@@ -1921,19 +1964,39 @@ export default function PatternBuilderTab({ settings, update }) {
 
   // ── Selection state for bulk export ──────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [exportPopup, setExportPopup] = useState(false)
+  const [selectedIds, setSelectedIds]     = useState([])
+  const [exportPopup, setExportPopup]     = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+
+  const isSelected  = id => selectedIds.includes(id)
+  const selectedCnt = selectedIds.length
 
   function toggleSelect(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    setDeleteConfirm(false)
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
-  function selectAll() { setSelectedIds(new Set(patterns.map(p => p.id))) }
-  function selectNone() { setSelectedIds(new Set()) }
-  function exitSelectionMode() { setSelectionMode(false); setSelectedIds(new Set()) }
+  function selectAll()  { setDeleteConfirm(false); setSelectedIds(patterns.map(p => p.id)) }
+  function selectNone() { setDeleteConfirm(false); setSelectedIds([]) }
+  function exitSelectionMode() { setSelectionMode(false); setSelectedIds([]); setDeleteConfirm(false) }
+
+  // Move a pattern up or down in the list
+  function movePattern(fromIdx, dir) {
+    const toIdx = fromIdx + dir
+    if (toIdx < 0 || toIdx >= patterns.length) return
+    const next = [...patterns]
+    ;[next[fromIdx], next[toIdx]] = [next[toIdx], next[fromIdx]]
+    savePatterns(next)
+  }
+
+  // Bulk-delete selected patterns (move to trash like normal del)
+  function deleteSelected() {
+    const now = Date.now()
+    const removed  = patterns.filter(p => selectedIds.includes(p.id)).map(p => ({ ...p, deletedAt: now }))
+    const newTrash = [...removed, ...trash].slice(0, 50)
+    const newPats  = patterns.filter(p => !selectedIds.includes(p.id))
+    saveBoth(newPats, newTrash)
+    exitSelectionMode()
+  }
 
   // ── Export helpers ────────────────────────────────────────────────────────
   // Export all patterns as one combined JSON (original behaviour)
@@ -1978,7 +2041,7 @@ export default function PatternBuilderTab({ settings, update }) {
   // The main "Export" button click — if nothing selected, export all combined
   function exportPatterns() {
     if (selectionMode) {
-      const chosen = patterns.filter(p => selectedIds.has(p.id))
+      const chosen = patterns.filter(p => isSelected(p.id))
       if (chosen.length === 0) return
       setExportPopup(true)
     } else {
@@ -2035,7 +2098,7 @@ export default function PatternBuilderTab({ settings, update }) {
 
       {/* ── Export mode popup ── */}
       {exportPopup && (() => {
-        const chosen = patterns.filter(p => selectedIds.has(p.id))
+        const chosen = patterns.filter(p => isSelected(p.id))
         return (
           <>
             <div onClick={() => setExportPopup(false)} style={{
@@ -2195,7 +2258,7 @@ export default function PatternBuilderTab({ settings, update }) {
           {patterns.length > 0 && (
             <button
               onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
-              title={selectionMode ? 'Exit selection mode' : 'Select patterns to export'}
+              title={selectionMode ? 'Exit selection mode' : 'Select patterns to export / delete'}
               style={{
                 padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
                 fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
@@ -2209,19 +2272,19 @@ export default function PatternBuilderTab({ settings, update }) {
           {/* Export button */}
           <button
             onClick={exportPatterns}
-            disabled={patterns.length === 0 || (selectionMode && selectedIds.size === 0)}
-            title={selectionMode ? `Export ${selectedIds.size} selected pattern(s)` : 'Export all patterns as JSON backup'}
+            disabled={patterns.length === 0 || (selectionMode && selectedCnt === 0)}
+            title={selectionMode ? `Export ${selectedCnt} selected pattern(s)` : 'Export all patterns as JSON backup'}
             style={{
               padding: '4px 10px', borderRadius: 7,
-              cursor: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'not-allowed' : 'pointer',
+              cursor: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'not-allowed' : 'pointer',
               fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
               border: '1px solid rgba(0,230,118,0.4)',
-              background: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'transparent' : 'rgba(0,230,118,0.08)',
-              color: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'var(--text3)' : G,
-              opacity: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 0.4 : 1,
+              background: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'transparent' : 'rgba(0,230,118,0.08)',
+              color: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'var(--text3)' : G,
+              opacity: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 0.4 : 1,
               display: 'flex', alignItems: 'center', gap: 4,
             }}
-          >📤 {selectionMode && selectedIds.size > 0 ? `Export (${selectedIds.size})` : 'Export'}</button>
+          >📤 {selectionMode && selectedCnt > 0 ? `Export (${selectedCnt})` : 'Export'}</button>
           {/* Import button */}
           <button
             onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
@@ -2240,32 +2303,63 @@ export default function PatternBuilderTab({ settings, update }) {
       {/* Selection mode toolbar */}
       {selectionMode && patterns.length > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-          padding: '8px 12px', borderRadius: 9,
-          background: 'rgba(255,160,0,0.06)', border: '1px solid rgba(255,160,0,0.25)',
+          marginBottom: 10, borderRadius: 10, overflow: 'hidden',
+          border: '1px solid rgba(255,160,0,0.3)',
+          background: 'rgba(255,160,0,0.05)',
         }}>
-          <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: AMB, fontWeight: 700 }}>
-            {selectedIds.size === 0 ? 'Select patterns to export' : `${selectedIds.size} selected`}
-          </span>
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={selectAll}
-            style={{
+          {/* Top row — count + all/none */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid rgba(255,160,0,0.15)' }}>
+            <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: AMB, fontWeight: 800 }}>
+              {selectedCnt === 0 ? '☑ Tap patterns below to select' : `✅ ${selectedCnt} of ${patterns.length} selected`}
+            </span>
+            <div style={{ flex: 1 }} />
+            <button onClick={selectAll} style={{
               fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
               padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
-              border: '1px solid rgba(255,160,0,0.35)', background: 'rgba(255,160,0,0.1)',
-              color: AMB,
-            }}
-          >All</button>
-          <button
-            onClick={selectNone}
-            style={{
+              border: '1px solid rgba(255,160,0,0.35)', background: 'rgba(255,160,0,0.1)', color: AMB,
+            }}>All</button>
+            <button onClick={selectNone} style={{
               fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
               padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
-              border: '1px solid var(--border)', background: 'var(--bg2)',
-              color: 'var(--text3)',
-            }}
-          >None</button>
+              border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+            }}>None</button>
+          </div>
+
+          {/* Action row — Export + Delete (only when something selected) */}
+          {selectedCnt > 0 && (
+            <div style={{ display: 'flex', gap: 8, padding: '8px 12px' }}>
+              {/* Export selected */}
+              <button onClick={exportPatterns} style={{
+                flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
+                fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
+                border: '1px solid rgba(0,230,118,0.4)', background: 'rgba(0,230,118,0.08)', color: G,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              }}>📤 Export ({selectedCnt})</button>
+
+              {/* Delete selected — two-step confirm */}
+              {!deleteConfirm ? (
+                <button onClick={() => setDeleteConfirm(true)} style={{
+                  flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
+                  border: '1px solid rgba(255,60,80,0.4)', background: 'rgba(255,60,80,0.06)', color: R,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                }}>🗑 Delete ({selectedCnt})</button>
+              ) : (
+                <div style={{ flex: 1, display: 'flex', gap: 5 }}>
+                  <button onClick={deleteSelected} style={{
+                    flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
+                    fontFamily: 'var(--mono)', fontWeight: 900, fontSize: 11,
+                    border: '1px solid rgba(255,60,80,0.7)', background: 'rgba(255,60,80,0.18)', color: R,
+                  }}>⚠ Confirm</button>
+                  <button onClick={() => setDeleteConfirm(false)} style={{
+                    flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer',
+                    fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
+                    border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
+                  }}>Cancel</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2305,35 +2399,21 @@ export default function PatternBuilderTab({ settings, update }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
             {patterns.map((p, i) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                {/* Selection checkbox */}
-                {selectionMode && (
-                  <div
-                    onClick={() => toggleSelect(p.id)}
-                    style={{
-                      flexShrink: 0, marginTop: 12, width: 18, height: 18, borderRadius: 5,
-                      border: `2px solid ${selectedIds.has(p.id) ? AMB : 'var(--border)'}`,
-                      background: selectedIds.has(p.id) ? 'rgba(255,160,0,0.18)' : 'var(--bg2)',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all .15s',
-                    }}
-                  >
-                    {selectedIds.has(p.id) && (
-                      <svg width="10" height="10" viewBox="0 0 8 8" fill="none">
-                        <polyline points="1,4 3.2,6.2 7,2" stroke={AMB} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div key={p.id}>
                   <PatternEditor
                     key={p.id} pattern={p} defaultOpen={p.id === newId}
                     onChange={np => upd(i, np)} onDelete={() => del(i)}
                     onMirrorPattern={(name) => mirrorPattern(i, name)}
                     onCopyPattern={(name) => copyPattern(i, name)}
                     allPatternNames={patterns.map(x => x.name)}
+                    selectionMode={selectionMode}
+                    isSelected={isSelected(p.id)}
+                    onToggleSelect={() => toggleSelect(p.id)}
+                    onMoveUp={() => movePattern(i, -1)}
+                    onMoveDown={() => movePattern(i, +1)}
+                    isFirst={i === 0}
+                    isLast={i === patterns.length - 1}
                   />
-                </div>
               </div>
             ))}
           </div>
