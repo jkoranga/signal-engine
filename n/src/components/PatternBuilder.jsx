@@ -2264,7 +2264,7 @@ export default function PatternBuilderTab({ settings, update }) {
           {/* Top row — count + all/none */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid rgba(255,160,0,0.15)' }}>
             <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: AMB, fontWeight: 800 }}>
-              {selectedIds.size === 0 ? 'Tap patterns to select' : `${selectedIds.size} / ${patterns.length} selected`}
+              {selectedIds.size === 0 ? '☑ Tap patterns below to select' : `✅ ${selectedIds.size} of ${patterns.length} selected`}
             </span>
             <div style={{ flex: 1 }} />
             <button onClick={selectAll} style={{
@@ -2353,74 +2353,76 @@ export default function PatternBuilderTab({ settings, update }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
             {patterns.map((p, i) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
 
-                {/* Left gutter: move arrows always visible, checkbox overlaid in select mode */}
+                {/* ── Left gutter ── */}
                 <div style={{
-                  flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 2, paddingTop: 10,
+                  flexShrink: 0, width: 28,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 4, paddingRight: 4,
                 }}>
                   {selectionMode ? (
                     /* Checkbox */
                     <div
                       onClick={() => toggleSelect(p.id)}
                       style={{
-                        width: 20, height: 20, borderRadius: 5, marginTop: 2,
-                        border: `2px solid ${selectedIds.has(p.id) ? AMB : 'var(--border)'}`,
-                        background: selectedIds.has(p.id) ? 'rgba(255,160,0,0.18)' : 'var(--bg2)',
+                        width: 22, height: 22, borderRadius: 6,
+                        border: `2px solid ${selectedIds.has(p.id) ? AMB : 'rgba(255,255,255,0.2)'}`,
+                        background: selectedIds.has(p.id) ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.04)',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all .15s',
+                        transition: 'all .15s', flexShrink: 0,
                       }}
                     >
                       {selectedIds.has(p.id) && (
-                        <svg width="10" height="10" viewBox="0 0 8 8" fill="none">
-                          <polyline points="1,4 3.2,6.2 7,2" stroke={AMB} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                        <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
+                          <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke={AMB} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       )}
                     </div>
                   ) : (
-                    /* Up / Down move buttons */
+                    /* ▲ index ▼ */
                     <>
                       <button
                         onClick={() => movePattern(i, -1)}
                         disabled={i === 0}
                         title="Move up"
                         style={{
-                          width: 20, height: 20, borderRadius: 5, cursor: i === 0 ? 'default' : 'pointer',
-                          border: '1px solid var(--border)', background: 'var(--bg2)',
+                          width: 24, height: 24, borderRadius: 6, padding: 0,
+                          border: `1px solid ${i === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)'}`,
+                          background: i === 0 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                          cursor: i === 0 ? 'default' : 'pointer',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: i === 0 ? 0.25 : 0.7, transition: 'opacity .15s', padding: 0,
+                          opacity: i === 0 ? 0.2 : 1,
                         }}
                       >
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                          <polyline points="1,6 4,2 7,6" stroke="var(--text2)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                        <span style={{ fontSize: 13, lineHeight: 1, color: 'var(--text2)', fontWeight: 700 }}>↑</span>
                       </button>
+
+                      <span style={{
+                        fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
+                        color: 'var(--text3)', lineHeight: 1, userSelect: 'none',
+                      }}>{i + 1}</span>
+
                       <button
                         onClick={() => movePattern(i, +1)}
                         disabled={i === patterns.length - 1}
                         title="Move down"
                         style={{
-                          width: 20, height: 20, borderRadius: 5, cursor: i === patterns.length - 1 ? 'default' : 'pointer',
-                          border: '1px solid var(--border)', background: 'var(--bg2)',
+                          width: 24, height: 24, borderRadius: 6, padding: 0,
+                          border: `1px solid ${i === patterns.length - 1 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)'}`,
+                          background: i === patterns.length - 1 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                          cursor: i === patterns.length - 1 ? 'default' : 'pointer',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: i === patterns.length - 1 ? 0.25 : 0.7, transition: 'opacity .15s', padding: 0,
+                          opacity: i === patterns.length - 1 ? 0.2 : 1,
                         }}
                       >
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                          <polyline points="1,2 4,6 7,2" stroke="var(--text2)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                        <span style={{ fontSize: 13, lineHeight: 1, color: 'var(--text2)', fontWeight: 700 }}>↓</span>
                       </button>
-                      {/* Position badge */}
-                      <span style={{
-                        fontSize: 8, fontFamily: 'var(--mono)', fontWeight: 800,
-                        color: 'var(--text3)', lineHeight: 1, marginTop: 1,
-                        letterSpacing: '-.02em',
-                      }}>{i + 1}</span>
                     </>
                   )}
                 </div>
 
+                {/* ── Pattern card ── */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <PatternEditor
                     key={p.id} pattern={p} defaultOpen={p.id === newId}
