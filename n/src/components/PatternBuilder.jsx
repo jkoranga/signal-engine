@@ -1926,10 +1926,11 @@ export default function PatternBuilderTab({ settings, update }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)   // bulk-delete confirm
 
   function toggleSelect(id) {
+    setDeleteConfirm(false)
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-  function selectAll()  { setSelectedIds(new Set(patterns.map(p => p.id))) }
-  function selectNone() { setSelectedIds(new Set()) }
+  function selectAll()  { setDeleteConfirm(false); setSelectedIds(new Set(patterns.map(p => p.id))) }
+  function selectNone() { setDeleteConfirm(false); setSelectedIds(new Set()) }
   function exitSelectionMode() { setSelectionMode(false); setSelectedIds(new Set()); setDeleteConfirm(false) }
 
   // Move a pattern up or down in the list
@@ -1938,12 +1939,16 @@ export default function PatternBuilderTab({ settings, update }) {
     if (toIdx < 0 || toIdx >= patterns.length) return
     const next = [...patterns]
     ;[next[fromIdx], next[toIdx]] = [next[toIdx], next[fromIdx]]
-    setPatterns(next)
+    savePatterns(next)
   }
 
-  // Bulk-delete selected patterns
+  // Bulk-delete selected patterns (move to trash like normal del)
   function deleteSelected() {
-    setPatterns(prev => prev.filter(p => !selectedIds.has(p.id)))
+    const now = Date.now()
+    const removed  = patterns.filter(p => selectedIds.has(p.id)).map(p => ({ ...p, deletedAt: now }))
+    const newTrash = [...removed, ...trash].slice(0, 50)
+    const newPats  = patterns.filter(p => !selectedIds.has(p.id))
+    saveBoth(newPats, newTrash)
     exitSelectionMode()
   }
 
