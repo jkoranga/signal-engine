@@ -867,6 +867,29 @@ export default function SettingsTab({ settings, set, update, reset, user, onUser
       </Accordion>
 
       <Accordion title="📖 User Manual" icon="📖" badge="HELP" defaultOpen={false} accentColor="rgba(0,230,118,0.4)" openKey={openKey}>
+        {/* Open standalone manual */}
+        <a
+          href="/manual.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '11px 14px', marginBottom: 12, borderRadius: 9, textDecoration: 'none',
+            background: 'rgba(0,230,118,0.07)',
+            border: '1.5px solid rgba(0,230,118,0.3)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>📖</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--green)' }}>Open Full Manual</div>
+              <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 1 }}>
+                Opens Signal Engine guide in a new tab
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: 14, color: 'var(--green)', opacity: 0.7 }}>↗</span>
+        </a>
         <ManualSection />
       </Accordion>
 

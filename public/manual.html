@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Signal Engine — User Manual</title>
+<style>
+:root{
+  --bg0:#070b0d;--bg1:#0d1217;--bg2:#141b22;--bg3:#1a2330;
+  --border:rgba(255,255,255,0.09);
+  --text:#e8edf2;--text2:#aab4be;--text3:#5a6a7a;
+  --green:#00e676;--red:#ff3c50;--amber:#ffa000;--blue:#4dabf7;
+  --purple:#b388ff;--lime:#c6ff00;
+  --mono:'JetBrains Mono','Fira Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg0);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;padding:0 0 60px}
+
+/* ── NAV ── */
+.nav{position:sticky;top:0;z-index:99;background:rgba(7,11,13,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.nav-logo{font-size:18px;font-weight:900;color:var(--green);letter-spacing:-.02em}
+.nav-sub{font-size:9px;color:var(--text3);margin-left:2px}
+
+/* ── TOC ── */
+.toc{background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:16px;margin-bottom:0}
+.toc-title{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--amber);margin-bottom:10px}
+.toc a{display:block;padding:3px 0;font-size:11px;color:var(--text2);text-decoration:none;border-left:2px solid transparent;padding-left:8px;transition:all .15s}
+.toc a:hover{color:var(--green);border-left-color:var(--green)}
+.toc-section{font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--text3);margin-top:8px;margin-bottom:2px;padding-left:8px}
+
+/* ── PAGE SECTIONS ── */
+.page{padding:20px 16px}
+.section{margin-bottom:32px}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.section-icon{font-size:22px}
+.section-title{font-size:16px;font-weight:900;letter-spacing:-.01em}
+.section-badge{font-size:8px;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:.08em}
+
+/* ── CARDS ── */
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.card-title{font-size:11px;font-weight:800;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.card-body{font-size:11px;color:var(--text2);line-height:1.75}
+
+/* ── FEATURE ROW ── */
+.feat{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.feat:last-child{border-bottom:none}
+.feat-icon{font-size:20px;flex-shrink:0;width:32px;text-align:center}
+.feat-name{font-size:11px;font-weight:800;color:var(--text);margin-bottom:3px}
+.feat-desc{font-size:10px;color:var(--text2);line-height:1.7}
+.feat-tip{font-size:9px;color:var(--amber);margin-top:4px;font-style:italic}
+
+/* ── PILL BADGES ── */
+.pill{display:inline-block;padding:2px 8px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.06em;margin:0 2px}
+.pill-green{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.3)}
+.pill-red{background:rgba(255,60,80,.1);color:var(--red);border:1px solid rgba(255,60,80,.3)}
+.pill-amber{background:rgba(255,160,0,.1);color:var(--amber);border:1px solid rgba(255,160,0,.3)}
+.pill-blue{background:rgba(77,171,247,.1);color:var(--blue);border:1px solid rgba(77,171,247,.3)}
+.pill-purple{background:rgba(179,136,255,.1);color:var(--purple);border:1px solid rgba(179,136,255,.3)}
+.pill-lime{background:rgba(198,255,0,.08);color:var(--lime);border:1px solid rgba(198,255,0,.25)}
+
+/* ── CONDITION TABLE ── */
+table{width:100%;border-collapse:collapse;font-size:10px;margin-top:6px}
+th{background:var(--bg2);color:var(--text3);font-weight:800;letter-spacing:.08em;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)}
+td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.td-key{color:var(--blue);font-weight:700;white-space:nowrap}
+.td-ex{color:var(--green);font-style:italic}
+
+/* ── EXAMPLE BOX ── */
+.example{background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10px;color:var(--text2);line-height:1.8}
+.example strong{color:var(--green)}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:var(--border);margin:20px 0}
+
+/* ── WARNING / TIP BOX ── */
+.tip{background:rgba(255,160,0,.06);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;padding:9px 12px;font-size:10px;color:var(--text2);line-height:1.75;margin:8px 0}
+.tip strong{color:var(--amber)}
+.info{background:rgba(77,171,247,.06);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:9px 12px;font-size:10px;color:var(--text2);line-height:1.75;margin:8px 0}
+.info strong{color:var(--blue)}
+
+/* ── STEP LIST ── */
+.steps{counter-reset:step;list-style:none;padding:0;margin:8px 0}
+.steps li{counter-increment:step;display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:10px;color:var(--text2);line-height:1.7}
+.steps li:last-child{border-bottom:none}
+.steps li::before{content:counter(step);width:20px;height:20px;border-radius:50%;background:rgba(0,230,118,0.15);border:1px solid rgba(0,230,118,0.3);color:var(--green);font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="nav">
+  <div>
+    <div class="nav-logo">📡 Signal Engine</div>
+    <div class="nav-sub">USER MANUAL — v4</div>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">📋 CONTENTS</div>
+  <div class="toc-section">HOME / SCANNER</div>
+  <a href="#scan-modes">Scan Modes (Single · All · Bull · Bear · Custom)</a>
+  <a href="#loop-mode">Loop Mode</a>
+  <a href="#sort-filter">Sort & Filter Results</a>
+  <a href="#result-cards">Result Cards</a>
+  <a href="#tf-tabs">Timeframe Tabs</a>
+  <div class="toc-section">SETTINGS</div>
+  <a href="#scan-settings">Scan Settings (Symbol Set · Interval · Dedup · Volume)</a>
+  <a href="#alerts">Alerts & Notifications</a>
+  <a href="#appearance">Appearance</a>
+  <a href="#signal-strength">Signal Strength Filters</a>
+  <a href="#custom-pairs">Custom Pairs</a>
+  <a href="#tf-scan-settings">Per-TF Pattern Settings</a>
+  <div class="toc-section">PATTERN BUILDER</div>
+  <a href="#pattern-overview">What is a Pattern?</a>
+  <a href="#pattern-fields">Fields (LHS)</a>
+  <a href="#operators">Operators</a>
+  <a href="#rhs-modes">Right-Hand Side Modes</a>
+  <a href="#range-check">Range / Candle Window</a>
+  <a href="#slope-mode">Slope Mode</a>
+  <a href="#pattern-actions">Pattern Actions (Mirror · Copy · Lock)</a>
+  <a href="#import-export">Import / Export / Bulk Select</a>
+</div>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════
+     HOME / SCANNER
+════════════════════════════════════════════ -->
+<div class="section" id="scan-modes">
+  <div class="section-header">
+    <span class="section-icon">🏠</span>
+    <span class="section-title">Home — Scanner</span>
+    <span class="section-badge pill-green">SCAN</span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚡ Scan Modes</div>
+    <div class="card-body">Choose what the scanner checks on each run.</div>
+  </div>
+
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">⚡</div>
+      <div>
+        <div class="feat-name">Single <span class="pill pill-amber">SINGLE</span></div>
+        <div class="feat-desc">Scans <strong>one symbol at a time</strong> — whichever is selected. Fast, focused. Good for monitoring one coin closely.</div>
+        <div class="feat-tip">Tip: tap any symbol in the list to switch to it.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⬡</div>
+      <div>
+        <div class="feat-name">All <span class="pill pill-blue">ALL</span></div>
+        <div class="feat-desc">Scans <strong>every symbol</strong> in your selected symbol set against both Bull and Bear patterns. Most comprehensive mode.</div>
+        <div class="feat-tip">Tip: use with a smaller symbol set (Top 30/100) to keep scans fast.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🟢</div>
+      <div>
+        <div class="feat-name">Bull <span class="pill pill-green">BULL</span></div>
+        <div class="feat-desc">Scans all symbols but <strong>only runs Bull patterns</strong>. Skips all Bear patterns entirely. Faster than All mode.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔴</div>
+      <div>
+        <div class="feat-name">Bear <span class="pill pill-red">BEAR</span></div>
+        <div class="feat-desc">Scans all symbols but <strong>only runs Bear patterns</strong>. Use when you're looking for short setups only.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⊞</div>
+      <div>
+        <div class="feat-name">Custom <span class="pill pill-purple">CUSTOM</span></div>
+        <div class="feat-desc">Only scans <strong>your Custom Pairs list</strong> (set in Settings). Great for a personal watchlist of specific coins.</div>
+        <div class="feat-tip">Set custom pairs in Settings → Custom Pairs.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOOP MODE -->
+<div class="section" id="loop-mode">
+  <div class="section-header">
+    <span class="section-icon">🔁</span>
+    <span class="section-title">Loop Mode</span>
+  </div>
+  <div class="card">
+    <div class="card-title">🔁 What is Loop Mode?</div>
+    <div class="card-body">
+      Loop Mode makes the scanner <strong>run continuously back-to-back</strong> without waiting for the auto-interval timer. As soon as one full scan finishes, the next one starts immediately.<br><br>
+      <strong style="color:var(--amber)">When to use it:</strong> When you want real-time continuous scanning during active market hours — e.g. scalping sessions or watching for breakouts.
+    </div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">▶</div>
+      <div>
+        <div class="feat-name">Normal Mode (Loop OFF)</div>
+        <div class="feat-desc">Scanner runs once, waits for the interval (e.g. every 60s), then runs again. Easier on battery and data.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔁</div>
+      <div>
+        <div class="feat-name">Loop Mode (Loop ON)</div>
+        <div class="feat-desc">Scanner runs → finishes → immediately starts again. The loop counter shows how many full scans have run. Tap Loop again to stop.</div>
+        <div class="feat-tip">⚠ Uses more data and battery. Best on WiFi with phone plugged in.</div>
+      </div>
+    </div>
+  </div>
+  <div class="tip"><strong>Loop + Single mode</strong> = watch one coin non-stop at maximum speed.</div>
+</div>
+
+<!-- SORT & FILTER -->
+<div class="section" id="sort-filter">
+  <div class="section-header">
+    <span class="section-icon">🔽</span>
+    <span class="section-title">Sort & Filter Results</span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔽 Result Filter</div>
+    <div class="card-body">Quickly show only Bull or Bear signals in the results list.</div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">⬡</div>
+      <div><div class="feat-name">All</div><div class="feat-desc">Show all signals — both Bull and Bear mixed together.</div></div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🟢</div>
+      <div><div class="feat-name">Bull only</div><div class="feat-desc">Hide all Bear signals. Only green/bull results visible.</div></div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔴</div>
+      <div><div class="feat-name">Bear only</div><div class="feat-desc">Hide all Bull signals. Only red/bear results visible.</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <div class="card-title">↕ Sort Columns</div>
+    <div class="card-body">Tap any column header to sort. Tap again to reverse order.</div>
+    <table style="margin-top:10px">
+      <tr><th>Column</th><th>Sorts by</th></tr>
+      <tr><td class="td-key">Time</td><td>When the signal was detected (newest first by default)</td></tr>
+      <tr><td class="td-key">Symbol</td><td>Coin name A→Z or Z→A</td></tr>
+      <tr><td class="td-key">Pattern</td><td>Pattern name alphabetically</td></tr>
+      <tr><td class="td-key">Gain %</td><td>Price change % — biggest movers first</td></tr>
+      <tr><td class="td-key">Volume</td><td>Trading volume — highest volume first</td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <div class="card-title">📊 Volume Filter</div>
+    <div class="card-body">
+      Hides low-volume coins from results. Set in Settings → Scan Settings.<br><br>
+      Options: <span class="pill pill-purple">No Filter</span> <span class="pill pill-purple">500K</span> <span class="pill pill-purple">1M</span> <span class="pill pill-purple">5M</span> <span class="pill pill-purple">10M</span><br><br>
+      <span style="color:var(--text3)">Example: "1M" means only show coins with 24h volume ≥ $1,000,000.</span>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT CARDS -->
+<div class="section" id="result-cards">
+  <div class="section-header">
+    <span class="section-icon">📋</span>
+    <span class="section-title">Result Cards</span>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">🟢</div>
+      <div>
+        <div class="feat-name">Green card = Bull signal</div>
+        <div class="feat-desc">A bull pattern matched this coin on this timeframe. Shows pattern name, symbol, price, gain %, volume, and time detected.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔴</div>
+      <div>
+        <div class="feat-name">Red card = Bear signal</div>
+        <div class="feat-desc">A bear pattern matched. Same info shown. Tap the card to see full condition details.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">✕</div>
+      <div>
+        <div class="feat-name">Dismiss a card</div>
+        <div class="feat-desc">Tap the × on a card to remove it from the current results. It won't reappear until the next scan finds it again.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TF TABS -->
+<div class="section" id="tf-tabs">
+  <div class="section-header">
+    <span class="section-icon">⏱</span>
+    <span class="section-title">Timeframe Tabs</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      The bottom tab bar shows all timeframes: <span class="pill pill-blue">1m</span> <span class="pill pill-blue">3m</span> <span class="pill pill-blue">5m</span> <span class="pill pill-blue">15m</span> <span class="pill pill-blue">30m</span> <span class="pill pill-blue">1h</span> <span class="pill pill-blue">4h</span> <span class="pill pill-blue">Day</span><br><br>
+      Each tab is <strong>independent</strong> — its own scan state, results, sort, filter, and pattern list. Switching tabs does not stop an active scan on another tab.<br><br>
+      A <strong style="color:var(--green)">green dot</strong> on a tab means that tab has active results.
+    </div>
+  </div>
+  <div class="tip"><strong>Each timeframe</strong> only runs patterns that have that TF enabled in Settings → Pattern Settings.</div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════
+     SETTINGS
+════════════════════════════════════════════ -->
+<div class="section" id="scan-settings">
+  <div class="section-header">
+    <span class="section-icon">⚙️</span>
+    <span class="section-title">Settings — Scan Settings</span>
+    <span class="section-badge pill-blue">GLOBAL</span>
+  </div>
+
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">📦</div>
+      <div>
+        <div class="feat-name">Symbol Set</div>
+        <div class="feat-desc">How many coins to scan across all timeframes.<br>
+          <span class="pill pill-amber">Top 30</span> fastest · <span class="pill pill-amber">Top 100</span> balanced · <span class="pill pill-amber">Top 200</span> wider · <span class="pill pill-amber">Top 500</span> comprehensive · <span class="pill pill-amber">All</span> every coin (slow)
+        </div>
+        <div class="feat-tip">Start with Top 100. Increase only if you need wider coverage.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⏰</div>
+      <div>
+        <div class="feat-name">Scan Interval</div>
+        <div class="feat-desc">How often the auto-scanner runs when Loop Mode is OFF.<br>
+          Options: <span class="pill pill-green">30s</span> <span class="pill pill-green">1m</span> <span class="pill pill-green">2m</span> <span class="pill pill-green">5m</span><br>
+          Shorter interval = more frequent updates but more data usage.
+        </div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔕</div>
+      <div>
+        <div class="feat-name">Dedup Interval</div>
+        <div class="feat-desc">Suppresses duplicate alerts for the same coin + pattern combination within a time window.<br>
+          Example: <span class="pill pill-purple">5m</span> means if BTCUSDT already fired "Bull Flag" in the last 5 minutes, it won't alert again.
+        </div>
+        <div class="feat-tip">Set higher (15m–30m) to reduce noise. Set to 0 to see every single match.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📊</div>
+      <div>
+        <div class="feat-name">Volume Filter (Global)</div>
+        <div class="feat-desc">Minimum 24h volume a coin must have to appear in results. Applies to all TF tabs.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALERTS -->
+<div class="section" id="alerts">
+  <div class="section-header">
+    <span class="section-icon">🔔</span>
+    <span class="section-title">Alerts & Notifications</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      Configure how you get notified when a signal fires.<br><br>
+      <strong style="color:var(--text)">Telegram Alerts</strong> — enter your Telegram Bot Token and Chat ID to receive signal messages directly in Telegram. Each signal sends: coin, pattern name, side, price, and timeframe.<br><br>
+      <strong style="color:var(--text)">Sound Alerts</strong> — plays a sound in-browser when a signal is found.<br><br>
+      <strong style="color:var(--text)">Browser Notifications</strong> — shows a system notification (requires permission).
+    </div>
+  </div>
+</div>
+
+<!-- APPEARANCE -->
+<div class="section" id="appearance">
+  <div class="section-header">
+    <span class="section-icon">🎨</span>
+    <span class="section-title">Appearance</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      Choose between <strong>Dark</strong> and <strong>Light</strong> themes. Dark is default and recommended for low-light trading sessions.<br><br>
+      Accent colour and font size options let you customise readability on small screens.
+    </div>
+  </div>
+</div>
+
+<!-- SIGNAL STRENGTH -->
+<div class="section" id="signal-strength">
+  <div class="section-header">
+    <span class="section-icon">◉</span>
+    <span class="section-title">Signal Strength Filters</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      Filter out weak signals by requiring a minimum number of conditions to pass.<br><br>
+      Example: if a pattern has 5 conditions and you set minimum strength to 3, only coins where at least 3 conditions match will appear — even if not all 5 pass.<br><br>
+      <strong style="color:var(--amber)">Higher = stricter = fewer but higher-quality signals.</strong>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOM PAIRS -->
+<div class="section" id="custom-pairs">
+  <div class="section-header">
+    <span class="section-icon">⊞</span>
+    <span class="section-title">Custom Pairs</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      Your personal watchlist of specific trading pairs.<br><br>
+      Add pairs like <span class="pill pill-green">BTCUSDT</span> <span class="pill pill-green">ETHUSDT</span> <span class="pill pill-amber">SOLUSDT</span> — one per line.<br><br>
+      When Scan Mode is set to <strong>Custom</strong>, only these pairs are scanned instead of the full symbol set. Much faster for a focused watchlist.
+    </div>
+  </div>
+</div>
+
+<!-- PER-TF SETTINGS -->
+<div class="section" id="tf-scan-settings">
+  <div class="section-header">
+    <span class="section-icon">🗂</span>
+    <span class="section-title">Per-TF Pattern Settings</span>
+    <span class="section-badge pill-purple">IMPORTANT</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      This is where you control <strong>which patterns run on which timeframes</strong>.<br><br>
+      Each of your patterns can be enabled or disabled per-scanner, and you can assign specific TFs to each pattern.<br><br>
+      Example: Your "EMA20 Slope" pattern is only useful on 1h and 4h — disable it for 1m and 5m to keep scans fast and reduce noise.
+    </div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">✅</div>
+      <div>
+        <div class="feat-name">Enable / Disable per scanner</div>
+        <div class="feat-desc">Toggle each pattern on/off for each scanner type (built-in scanners + your custom patterns).</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⏱</div>
+      <div>
+        <div class="feat-name">TF selection per pattern</div>
+        <div class="feat-desc">Choose which timeframes each pattern runs on: <span class="pill pill-blue">1m</span> <span class="pill pill-blue">5m</span> <span class="pill pill-blue">15m</span> <span class="pill pill-blue">1h</span> etc. A pattern only fires alerts on its assigned TFs.</div>
+        <div class="feat-tip">Assign short TFs (1m/5m) to fast scalp patterns. Long TFs (4h/1d) to trend patterns.</div>
+      </div>
+    </div>
+  </div>
+  <div class="info"><strong>No patterns for this TF?</strong> If you open a TF tab and see a warning, go to Settings → Pattern Settings and enable at least one pattern for that timeframe.</div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════════════
+     PATTERN BUILDER
+════════════════════════════════════════════ -->
+<div class="section" id="pattern-overview">
+  <div class="section-header">
+    <span class="section-icon">🔧</span>
+    <span class="section-title">Pattern Builder</span>
+    <span class="section-badge pill-lime">PATTERNS</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      A <strong>Pattern</strong> is a named set of conditions that must all be true for a coin to fire a signal.<br><br>
+      Think of it as: <em>"Show me coins where ALL of these are true right now."</em><br><br>
+      Every pattern has a <strong>side</strong> (Bull or Bear), a list of <strong>conditions</strong>, and a set of <strong>timeframes</strong> it runs on.
+    </div>
+  </div>
+  <div class="example">
+    <strong>Example pattern — "EMA Bounce Bull"</strong><br>
+    ① Close > EMA20 &nbsp;(price is above EMA20)<br>
+    ② EMA20 > EMA50 &nbsp;(short EMA above long EMA)<br>
+    ③ Close[-1] &lt; EMA20[-1] &nbsp;(previous candle was below EMA20)<br>
+    ④ RSI &lt; 60 &nbsp;(not overbought)<br>
+    → Fires when price just bounced back above EMA20 with trend alignment.
+  </div>
+</div>
+
+<!-- FIELDS -->
+<div class="section" id="pattern-fields">
+  <div class="section-header">
+    <span class="section-icon">📊</span>
+    <span class="section-title">Fields — Left Side (LHS)</span>
+  </div>
+  <div class="card">
+    <div class="card-body">The <strong>Left Hand Side</strong> is what you're measuring on a candle. You also pick a candle offset like <span class="pill pill-blue">[0] Current</span> or <span class="pill pill-blue">[-1] Prev 1</span>.</div>
+  </div>
+  <table>
+    <tr><th>Group</th><th>Fields</th><th>What it is</th></tr>
+    <tr>
+      <td class="td-key">Price</td>
+      <td>Close, Open, High, Low, Volume</td>
+      <td>Raw candle data. Close is the current closing price.</td>
+    </tr>
+    <tr>
+      <td class="td-key">EMA</td>
+      <td>EMA5 → EMA600</td>
+      <td>Exponential Moving Average over N candles. EMA20 reacts faster than EMA200.</td>
+    </tr>
+    <tr>
+      <td class="td-key">Indicators</td>
+      <td>RSI, +DI, -DI, ADX</td>
+      <td>RSI 14 = momentum 0–100. +DI/-DI/ADX = trend direction & strength.</td>
+    </tr>
+    <tr>
+      <td class="td-key">Calc</td>
+      <td>Change%, 24h%, Body%, Body Size, Range H-L, Upper Wick, Lower Wick, Is Green, Is Red</td>
+      <td>Computed values from candle data. Most useful for candle-pattern conditions.</td>
+    </tr>
+  </table>
+  <div class="tip"><strong>Candle Offset</strong> — [0] = current candle, [-1] = 1 candle back, [-2] = 2 candles back, up to [-10]. Use offsets to check what happened on previous candles.</div>
+</div>
+
+<!-- OPERATORS -->
+<div class="section" id="operators">
+  <div class="section-header">
+    <span class="section-icon">⚖️</span>
+    <span class="section-title">Operators</span>
+  </div>
+  <table>
+    <tr><th>Operator</th><th>Meaning</th><th>Example</th></tr>
+    <tr><td class="td-key">&gt;</td><td>Greater than</td><td class="td-ex">Close > EMA20 → price above EMA</td></tr>
+    <tr><td class="td-key">&gt;=</td><td>Greater than or equal</td><td class="td-ex">RSI >= 50 → RSI at or above 50</td></tr>
+    <tr><td class="td-key">&lt;</td><td>Less than</td><td class="td-ex">Close < EMA50 → price below EMA50</td></tr>
+    <tr><td class="td-key">&lt;=</td><td>Less than or equal</td><td class="td-ex">RSI <= 30 → oversold or at 30</td></tr>
+    <tr><td class="td-key">=</td><td>Equal to</td><td class="td-ex">Is Green = 1 → candle is bullish</td></tr>
+    <tr><td class="td-key">≠</td><td>Not equal to</td><td class="td-ex">Is Red ≠ 1 → candle is not bearish</td></tr>
+  </table>
+</div>
+
+<!-- RHS MODES -->
+<div class="section" id="rhs-modes">
+  <div class="section-header">
+    <span class="section-icon">➡️</span>
+    <span class="section-title">Right-Hand Side (RHS) Modes</span>
+  </div>
+  <div class="card">
+    <div class="card-body">The <strong>Right Hand Side</strong> is what you're comparing against. Six modes:</div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">🔢</div>
+      <div>
+        <div class="feat-name">Value <span class="pill pill-blue">NUMBER</span></div>
+        <div class="feat-desc">A fixed number. Example: <em>RSI > 50</em> or <em>Volume > 1000000</em></div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📊</div>
+      <div>
+        <div class="feat-name">Field <span class="pill pill-blue">FIELD</span></div>
+        <div class="feat-desc">Another candle field. Example: <em>Close > EMA20</em> or <em>EMA20 > EMA50</em></div>
+        <div class="feat-tip">You can also pick a different candle offset for the RHS field.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">✖️</div>
+      <div>
+        <div class="feat-name">× Multiplier <span class="pill pill-blue">MULT</span></div>
+        <div class="feat-desc">Field × a multiplier. Example: <em>Close > EMA20 × 1.02</em> means price is more than 2% above EMA20.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">±</div>
+      <div>
+        <div class="feat-name">± Percent <span class="pill pill-blue">PCT</span></div>
+        <div class="feat-desc">Field ± a percentage offset. Example: <em>LWick > Body +25%</em> means lower wick is longer than body by 25%.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📐</div>
+      <div>
+        <div class="feat-name">% Diff <span class="pill pill-blue">PCTDIFF</span></div>
+        <div class="feat-desc">The % gap between left and right field. Example: how far Close is from EMA200 as a percentage.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📈</div>
+      <div>
+        <div class="feat-name">Slope % <span class="pill pill-amber">SLOPE</span></div>
+        <div class="feat-desc">How much a field rose or fell over N candles, as %. Example: <em>EMA10 slope >= 2%</em> over 10 candles means EMA is rising steeply. See Slope section below.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RANGE CHECK -->
+<div class="section" id="range-check">
+  <div class="section-header">
+    <span class="section-icon">🪟</span>
+    <span class="section-title">Range Check — Candle Window</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      By default a condition checks <strong>only the current candle [0]</strong>.<br><br>
+      Enable <strong>Range Check</strong> to check the condition across a <em>window</em> of candles (e.g. last 5 candles), with two modes:
+    </div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">✅</div>
+      <div>
+        <div class="feat-name">ALL candles pass</div>
+        <div class="feat-desc">Every candle in the range must satisfy the condition. Good for confirming a sustained trend.</div>
+        <div class="feat-tip">Example: ALL[-1 to -5] Close > EMA20 → price was above EMA20 for the last 5 candles.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">☑️</div>
+      <div>
+        <div class="feat-name">ANY candle passes</div>
+        <div class="feat-desc">At least one candle in the range must satisfy the condition.</div>
+        <div class="feat-tip">Example: ANY[-1 to -3] LWick > Body +25% → a wick-rejection candle appeared in the last 3 candles.</div>
+      </div>
+    </div>
+  </div>
+  <div class="info">The range is defined as <strong>From offset → To offset</strong>, e.g. From [0] To [-4] = current + 4 previous candles = 5 candles total.</div>
+</div>
+
+<!-- SLOPE MODE -->
+<div class="section" id="slope-mode">
+  <div class="section-header">
+    <span class="section-icon">📐</span>
+    <span class="section-title">Slope Mode (Trend Angle)</span>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      Slope % measures <strong>how much a field has risen or fallen over N candles</strong> as a percentage:<br><br>
+      <code style="background:var(--bg2);padding:2px 6px;border-radius:4px;color:var(--green)">slope = (value[now] / value[N candles ago] − 1) × 100</code>
+    </div>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">📏</div>
+      <div>
+        <div class="feat-name">Slope Length (N)</div>
+        <div class="feat-desc">How many candles back to measure from. Default 5. Larger N = smoother, less reactive. Smaller N = sharper, more reactive.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⏭</div>
+      <div>
+        <div class="feat-name">Slope Skip</div>
+        <div class="feat-desc">Skip the most recent N candles before measuring. Skip=0 starts from the current candle. Skip=2 ignores the 2 most recent candles — useful to avoid false reads from the live forming candle.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">%</div>
+      <div>
+        <div class="feat-name">Threshold %</div>
+        <div class="feat-desc">The slope must be above (or below) this %. Positive = rising, negative = falling.</div>
+        <div class="feat-tip">Example: EMA10 slope >= +2% over 10 candles = EMA is rising at least 2% across 10 candles = uptrend confirmed.</div>
+      </div>
+    </div>
+  </div>
+  <div class="example">
+    <strong>Bull slope condition:</strong> EMA10 >= Slope +2% (len 10, skip 0)<br>
+    → EMA10 has risen at least 2% over the last 10 candles = bullish momentum<br><br>
+    <strong>Bear slope condition:</strong> EMA10 &lt;= Slope −2% (len 10, skip 0)<br>
+    → EMA10 has fallen at least 2% over the last 10 candles = bearish pressure
+  </div>
+</div>
+
+<!-- PATTERN ACTIONS -->
+<div class="section" id="pattern-actions">
+  <div class="section-header">
+    <span class="section-icon">⚡</span>
+    <span class="section-title">Pattern Actions</span>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">⇄</div>
+      <div>
+        <div class="feat-name">Mirror</div>
+        <div class="feat-desc">Creates an opposite copy of the pattern — flips Bull ↔ Bear, inverts all operators (> becomes <), flips High ↔ Low and LowerWick ↔ UpperWick. One-tap to create a matching bear pattern from a bull pattern.</div>
+        <div class="feat-tip">After mirroring, review the conditions to make sure they make sense for the new side.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⧉</div>
+      <div>
+        <div class="feat-name">Copy</div>
+        <div class="feat-desc">Duplicates the pattern with a new name. Same side, same conditions. Good for creating a variation without losing the original.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔒</div>
+      <div>
+        <div class="feat-name">Lock</div>
+        <div class="feat-desc">Locks the pattern to prevent accidental edits. A locked pattern can still scan — it just can't be modified until you unlock it. Tap the lock icon and confirm to unlock.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">↑↓</div>
+      <div>
+        <div class="feat-name">Reorder (↑ ↓ arrows)</div>
+        <div class="feat-desc">Move patterns up or down in the list. The order affects which patterns appear first in scan results.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🗑</div>
+      <div>
+        <div class="feat-name">Delete → Trash</div>
+        <div class="feat-desc">Deleted patterns go to the <strong>Trash Bin</strong> (bottom of the page). They can be restored from there. Trash holds up to 50 patterns. Use Purge to permanently delete.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT / EXPORT -->
+<div class="section" id="import-export">
+  <div class="section-header">
+    <span class="section-icon">📤</span>
+    <span class="section-title">Import / Export / Bulk Select</span>
+  </div>
+  <div class="card" style="padding:10px 14px">
+    <div class="feat">
+      <div class="feat-icon">📤</div>
+      <div>
+        <div class="feat-name">Export</div>
+        <div class="feat-desc">Download your patterns as a <strong>.json</strong> backup file. Two options when exporting selected patterns:<br>
+          <span class="pill pill-green">Combined</span> — all selected patterns in one file<br>
+          <span class="pill pill-blue">Individual</span> — one separate .json file per pattern, named after the pattern
+        </div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📥</div>
+      <div>
+        <div class="feat-name">Import</div>
+        <div class="feat-desc">Load patterns from a .json backup file. Duplicate pattern names are automatically skipped to prevent overwriting existing patterns.</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">☑</div>
+      <div>
+        <div class="feat-name">Select Mode (bulk actions)</div>
+        <div class="feat-desc">Tap <strong>☑ Select</strong> to enter selection mode. Tap any pattern to select it (amber checkbox appears). Then use:<br>
+          <span class="pill pill-green">Export (N)</span> — export selected patterns<br>
+          <span class="pill pill-red">Delete (N)</span> — delete selected (requires confirm tap)<br>
+          Use <strong>All</strong> / <strong>None</strong> buttons to select/deselect all at once.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tip"><strong>Backup tip:</strong> Export all your patterns regularly and save the JSON file to Google Drive or Telegram Saved Messages as a backup.</div>
+</div>
+
+</div><!-- /page -->
+
+<div style="text-align:center;padding:20px;font-size:9px;color:var(--text3);font-family:var(--mono)">
+  Signal Engine User Manual · v4 · Built for pattern traders
+</div>
+
+</body>
+</html>
