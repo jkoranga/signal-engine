@@ -1498,7 +1498,7 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
         <span style={{ fontSize: 22 }}>{pattern.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 14, color: pattern.enabled ? color : 'var(--text2)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pattern.name}</div>
+            wordBreak: 'break-word', lineHeight: 1.3 }}>{pattern.name}</div>
           <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 3 }}>
             {pattern.side.toUpperCase()} · {active} cond{active !== 1 ? 's' : ''} · {pattern.tfs.join(' ') || 'no TF'}
           </div>
