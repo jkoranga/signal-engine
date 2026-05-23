@@ -178,26 +178,48 @@ function mirrorCond(cond) {
   const mirroredLhs = MIRROR_FIELD[cond.lhsField] ?? cond.lhsField
   const mirroredRhs = MIRROR_FIELD[cond.rhsField] ?? cond.rhsField
 
-  // When a wick swaps to the opposite wick, the comparison direction stays the
-  // same and the ±% offset keeps its sign — both wicks are measured the same way.
-  // e.g.  LWick > Body +25%  mirrors to  UWick > Body +25%  (not UWick < Body -25%)
-  const wickSwap = cond.lhsField !== mirroredLhs &&
-    (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')
+  // ── RSI special mirror: reflect around midline 50 ────────────────────────
+  // Bull RSI 60 (50+10) → Bear RSI 40 (50-10)  formula: 100 - value
+  // Bull RSI 70 (50+20) → Bear RSI 30 (50-20)
+  // RSI 50 → RSI 50 (midline stays the same)
+  // Operator also flips: > becomes <  etc.
+  const isRsiCond = cond.lhsField === 'rsi'
+  if (isRsiCond && cond.rhsMode === 'number') {
+    const mirroredValue = parseFloat((100 - parseFloat(cond.rhsNum)).toFixed(4))
+    return {
+      ...cond,
+      id: uid(),
+      op: MIRROR_OP[cond.op] ?? cond.op,
+      rhsNum: mirroredValue,
+      label: cond.label ? `Mirror of ${cond.label}` : '',
+    }
+  }
+
+  // ── Symmetric fields — keep value & operator unchanged ───────────────────
+  // These fields mean the same on both sides: body, bodyPct, volume, ADX, etc.
+  // e.g. Body Size > 80% mirrors to Body Size > 80% (not Body Size > -80%)
+  const SYMMETRIC_FIELDS = new Set([
+    'body', 'bodyPct', 'rangeHL', 'volume', 'adx', 'diPos', 'diNeg',
+    'change', 'change24h', 'isGreen', 'isRed',
+  ])
+  const keepSign = (cond.lhsField !== mirroredLhs &&
+    (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')) ||
+    SYMMETRIC_FIELDS.has(cond.lhsField)
 
   // Invert multiplier: × 1.005 → × (1/1.005) = × 0.995
   const rhsMult = cond.rhsMult != null
     ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
     : cond.rhsMult
 
-  // Wick swap: keep sign.  Price/EMA/other mirror: invert.
-  const rhsNum   = cond.rhsNum   != null ? (wickSwap ?  parseFloat(cond.rhsNum)   : -parseFloat(cond.rhsNum))   : cond.rhsNum
-  const rhsPct   = cond.rhsPct   != null ? (wickSwap ?  parseFloat(cond.rhsPct)   : -parseFloat(cond.rhsPct))   : cond.rhsPct
-  const slopeNum = cond.slopeNum != null ? (wickSwap ?  parseFloat(cond.slopeNum) : -parseFloat(cond.slopeNum)) : cond.slopeNum
+  // keepSign: preserve value as-is.  Others: negate.
+  const rhsNum   = cond.rhsNum   != null ? (keepSign ? parseFloat(cond.rhsNum)   : -parseFloat(cond.rhsNum))   : cond.rhsNum
+  const rhsPct   = cond.rhsPct   != null ? (keepSign ? parseFloat(cond.rhsPct)   : -parseFloat(cond.rhsPct))   : cond.rhsPct
+  const slopeNum = cond.slopeNum != null ? (keepSign ? parseFloat(cond.slopeNum) : -parseFloat(cond.slopeNum)) : cond.slopeNum
 
   return {
     ...cond,
     id: uid(),
-    op: wickSwap ? cond.op : (MIRROR_OP[cond.op] ?? cond.op),
+    op: keepSign ? cond.op : (MIRROR_OP[cond.op] ?? cond.op),
     lhsField: mirroredLhs,
     rhsField: mirroredRhs,
     rhsMult,
@@ -683,6 +705,7 @@ function JoinBadge({ value, onChange, onGroupToggle, grouped, groupColor }) {
 
 // ── Condition card ────────────────────────────────────────────────────────────
 function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown, open, onToggleOpen }) {
+  const [confirmRemove, setConfirmRemove] = React.useState(false)
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
 
@@ -739,7 +762,14 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           {idx > 0        && <IBtn onClick={onMoveUp}   title="Move up">↑</IBtn>}
           {idx < total-1  && <IBtn onClick={onMoveDown} title="Move down">↓</IBtn>}
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
-          <IBtn onClick={onRemove} title="Delete" col="var(--red)">×</IBtn>
+          {confirmRemove ? (
+            <>
+              <IBtn onClick={() => { onRemove(); setConfirmRemove(false) }} title="Confirm delete" col="var(--red)">✓</IBtn>
+              <IBtn onClick={() => setConfirmRemove(false)} title="Cancel" col="var(--text3)">✕</IBtn>
+            </>
+          ) : (
+            <IBtn onClick={() => setConfirmRemove(true)} title="Delete condition" col="var(--red)">×</IBtn>
+          )}
         </div>
         <span onClick={onToggleOpen} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
           {open ? '▲' : '▼'}
@@ -2408,18 +2438,7 @@ export default function PatternBuilderTab({ settings, update }) {
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >📤 {selectionMode && selectedCnt > 0 ? `Export (${selectedCnt})` : 'Export'}</button>
-          {/* Examples button */}
-          <button
-            onClick={() => { setImportError(''); setExamplesPopup(true) }}
-            title="Browse example patterns"
-            style={{
-              padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
-              fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
-              border: '1px solid rgba(179,136,255,0.4)',
-              background: 'rgba(179,136,255,0.08)', color: '#b388ff',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}
-          >📐 Examples</button>
+
           {/* Import button */}
           <button
             onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
