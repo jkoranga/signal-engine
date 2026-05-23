@@ -775,13 +775,13 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         </div>
       </div>
 
-      {/* ── ONE unified scrollable row: scan mode | 🟢🔴 | volume | sort ── */}
+      {/* ── Row 1: Scan modes ── */}
       <div style={{
         display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
         overflowX:'auto', WebkitOverflowScrolling:'touch',
         scrollbarWidth:'none', msOverflowStyle:'none',
         marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
-        paddingBottom:4, marginBottom:8,
+        paddingBottom:4, marginBottom:6,
       }}>
         {/* Scan modes */}
         {SCAN_MODES.map(m=>(
@@ -798,9 +798,16 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
             {m.id==='custom'&&<span style={{fontSize:8,opacity:.7}}>({customPairs.length})</span>}
           </button>
         ))}
+      </div>
 
-        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
-
+      {/* ── Row 2: Bull/Bear filter | volume | sort ── */}
+      <div style={{
+        display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
+        overflowX:'auto', WebkitOverflowScrolling:'touch',
+        scrollbarWidth:'none', msOverflowStyle:'none',
+        marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
+        paddingBottom:4, marginBottom:8,
+      }}>
         {/* Bull / Bear filter */}
         {[['all','⬡'],['bull','🟢'],['bear','🔴']].map(([id,icon])=>(
           <button key={id} onClick={()=>setResultFilter(id)} style={{
