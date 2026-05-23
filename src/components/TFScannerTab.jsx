@@ -814,10 +814,6 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         </div>
       )}
 
-
-
-
-
       {errors.length>0&&(
         <div className="error-banner">
           ⚠ {errors.slice(0,5).join(', ')}{errors.length>5?` +${errors.length-5} more`:''}
@@ -855,26 +851,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
               ))}
             </div>
           </div>
-          {/* Filter + sort row — single horizontal scrollable line */}
-          <div style={{ display:'flex',alignItems:'center',gap:4,overflowX:'auto',flexWrap:'nowrap',
-            paddingBottom:4,WebkitOverflowScrolling:'touch',scrollbarWidth:'none',msOverflowStyle:'none' }}>
-            {/* Signal / Bull / Bear filter */}
-            {[['all','Signal','var(--accent)','var(--accent-dim)'],['bull','🟢 Bull','var(--green)','var(--green-dim)'],['bear','🔴 Bear','var(--red)','var(--red-dim)']].map(([id,lbl,col,bg])=>(
-              <button key={id} onClick={()=>setResultFilter(id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(resultFilter===id?{borderColor:col,color:col,background:bg,fontWeight:700}:{}) }}>{lbl}</button>
-            ))}
-            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
-            {/* Volume filter */}
-            {VOLUME_FILTERS.map(f=>(
-              <button key={f.id} onClick={()=>setVolumeFilter(f.id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(volumeFilter===f.id?{borderColor:'var(--purple)',color:'var(--purple)',background:'var(--purple-dim)',fontWeight:700}:{}) }}>{f.label}</button>
-            ))}
-            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
-            <span style={{ fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',flexShrink:0 }}>↕</span>
-            {[['time','Time'],['symbol','Sym'],['gain','Gain'],['volume','Vol']].map(([col,label])=>(
-              <button key={col} className={`sort-btn ${sortBy===col?'active':''}`} onClick={()=>toggleSort(col)} style={{ flexShrink:0,whiteSpace:'nowrap' }}>
-                {label}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}
-              </button>
-            ))}
-          </div>
+
         </div>
 
         {displayedCount===0 ? (
