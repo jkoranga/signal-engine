@@ -118,12 +118,16 @@ function groupColor(groupId) {
 // Mirror an operator (flip comparison direction)
 const MIRROR_OP = { '>': '<', '>=': '<=', '<': '>', '<=': '>=', '=': '=', '≠': '≠' }
 
-// Flip High ↔ Low and LowerWick ↔ UpperWick for bearish/bullish mirror
+// Flip directional fields for bull→bear mirror.
+// isGreen ↔ isRed: a green candle condition becomes a red candle condition.
+// High ↔ Low, LowerWick ↔ UpperWick: price levels swap direction.
 const MIRROR_FIELD = {
   'high':      'low',
   'low':       'high',
   'lowerWick': 'upperWick',
   'upperWick': 'lowerWick',
+  'isGreen':   'isRed',    // FIX: bull isGreen=1 → bear isRed=1
+  'isRed':     'isGreen',  // FIX: reverse mapping
 }
 
 function mirrorCond(cond) {
@@ -134,34 +138,45 @@ function mirrorCond(cond) {
   const wickSwap = cond.lhsField !== mirroredLhs &&
     (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')
 
-  // Size/magnitude fields are always absolute positive values (0-100 range, no negatives).
-  // Body%, Body, Range, Wick sizes, IsGreen/IsRed — keep RHS sign and operator on mirror.
-  // Bull Body% > 90  →  Bear Body% > 90  (same threshold, not -90)
-  // Size/magnitude fields — always absolute positive (0-100), keep value & op
+  // SIZE_FIELDS: magnitude/neutral fields — always absolute positive, keep RHS value & op.
+  // Body%, Body, Range, Wicks — direction-neutral, threshold doesn't negate.
+  // volume — neutral (same volume threshold applies either side).
+  // ADX, diPlus, diMinus — FIX: always 0–100, negating produces nonsense values.
+  // NOTE: isGreen/isRed removed — they are handled by MIRROR_FIELD swap above.
   const SIZE_FIELDS = new Set([
-    'body','bodyPct','range','rangePct',
-    'upperWick','lowerWick','wickPct',
-    'isGreen','isRed','volume',
+    'body', 'bodyPct', 'range', 'rangePct',
+    'upperWick', 'lowerWick', 'wickPct',
+    'volume',
+    'adx', 'diPlus', 'diMinus',  // FIX: direction-neutral 0-100 indicators
   ])
   const isSizeField = SIZE_FIELDS.has(cond.lhsField)
 
-  // RSI mirrors around 50 (the neutral midpoint):
+  // RSI mirrors around 50 (neutral midpoint) for 'number' mode only:
   //   Bull RSI > 60  →  Bear RSI < 40   (100 - 60 = 40)
   //   Bull RSI > 70  →  Bear RSI < 30   (100 - 70 = 30)
-  //   Bull RSI = 50  →  Bear RSI = 50   (symmetric)
-  const isRsiField = cond.lhsField === 'rsi'
+  //   Bull RSI = 50  →  Bear RSI = 50   (symmetric, op stays =)
+  // For pctdiff/slope/mult/pct modes, RSI is treated like any other numeric field
+  // (negate threshold, flip op) since those modes compute a relative change, not an absolute level.
+  const isRsiNumberMode = cond.lhsField === 'rsi' && cond.rhsMode === 'number'
 
   const keepSign = wickSwap || isSizeField
   const keepOp   = isSizeField || wickSwap
 
-  // Invert multiplier for non-size, non-RSI fields
+  // Invert multiplier for directional fields in mult mode (close > EMA×1.002 → close < EMA×0.998).
+  // Size/neutral fields keep mult as-is (body > range×1.5 stays body > range×1.5).
+  // RSI number-mode keeps mult (not applicable, but safe to preserve).
   const rhsMult = cond.rhsMult != null
-    ? (isSizeField || isRsiField ? parseFloat(cond.rhsMult) : parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6)))
+    ? (keepSign || isRsiNumberMode
+        ? parseFloat(cond.rhsMult)
+        : parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6)))
     : cond.rhsMult
 
-  // RSI: mirror rhsNum around 50; others: keep or negate
+  // rhsNum:
+  //   RSI number mode → mirror around 50 (100 - val)
+  //   Size/neutral fields → keep value (absolute thresholds don't change direction)
+  //   All others (price fields, changePct, change24h, pctdiff threshold, etc.) → negate
   const rhsNum = cond.rhsNum != null
-    ? (isRsiField
+    ? (isRsiNumberMode
         ? parseFloat((100 - parseFloat(cond.rhsNum)).toFixed(4))
         : keepSign ? parseFloat(cond.rhsNum) : -parseFloat(cond.rhsNum))
     : cond.rhsNum
@@ -169,8 +184,12 @@ function mirrorCond(cond) {
   const rhsPct   = cond.rhsPct   != null ? (keepSign ? parseFloat(cond.rhsPct)   : -parseFloat(cond.rhsPct))   : cond.rhsPct
   const slopeNum = cond.slopeNum != null ? (keepSign ? parseFloat(cond.slopeNum) : -parseFloat(cond.slopeNum)) : cond.slopeNum
 
-  // RSI flips operator (> 60 → < 40); size fields keep op; others flip
-  const finalOp = isRsiField
+  // Operator:
+  //   RSI number mode → flip (> 60 becomes < 40 after rhsNum mirrors around 50)
+  //   Size/neutral fields → keep (threshold meaning is the same either side)
+  //   Wick swap → keep (same direction of measurement)
+  //   All others → flip
+  const finalOp = isRsiNumberMode
     ? (MIRROR_OP[cond.op] ?? cond.op)
     : keepOp ? cond.op : (MIRROR_OP[cond.op] ?? cond.op)
 

@@ -800,6 +800,41 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         ))}
       </div>
 
+      {/* ── Row 2: All | 🟢 | 🔴 | divider | All Vol | >500K | >1M | >5M | >10M ── */}
+      <div style={{
+        display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
+        overflowX:'auto', WebkitOverflowScrolling:'touch',
+        scrollbarWidth:'none', msOverflowStyle:'none',
+        marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
+        paddingBottom:4, marginBottom:8,
+      }}>
+        {/* All / 🟢 / 🔴 result filter */}
+        {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,icon])=>(
+          <button key={id} onClick={()=>setResultFilter(id)} style={{
+            padding:'5px 10px', borderRadius:20, cursor:'pointer', fontSize:13, flexShrink:0,
+            border:`1.5px solid ${resultFilter===id ? 'var(--accent)' : 'var(--border)'}`,
+            background: resultFilter===id ? 'var(--accent-dim)' : 'var(--bg2)',
+            color: resultFilter===id ? 'var(--accent)' : 'var(--text3)',
+            fontFamily:'var(--mono)', fontWeight: resultFilter===id ? 700 : 400,
+            fontSize:11, transition:'all .15s',
+          }}>{icon}</button>
+        ))}
+
+        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
+
+        {/* Volume filters */}
+        {VOLUME_FILTERS.map(f=>(
+          <button key={f.id} onClick={()=>setVolumeFilter(f.id)} style={{
+            padding:'5px 10px', borderRadius:20, cursor:'pointer', flexShrink:0, whiteSpace:'nowrap',
+            border:`1.5px solid ${volumeFilter===f.id ? 'var(--purple)' : 'var(--border)'}`,
+            background: volumeFilter===f.id ? 'var(--purple-dim)' : 'var(--bg2)',
+            color: volumeFilter===f.id ? 'var(--purple)' : 'var(--text3)',
+            fontSize:11, fontFamily:'var(--mono)', fontWeight: volumeFilter===f.id ? 700 : 400,
+            transition:'all .15s',
+          }}>{f.label}</button>
+        ))}
+      </div>
+
       {/* ── Single sym input ── */}
       {scanMode==='single'&&(
         <div style={{ display:'flex',gap:8,marginBottom:10 }}>
@@ -824,51 +859,34 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
 
       {/* ── Results ── */}
       <div>
-        {/* Results header bar */}
-        <div style={{ background:'var(--bg1)',border:`1.5px solid ${tabColor}33`,
-          borderRadius:12,padding:'12px 14px',marginBottom:8 }}>
-          <div style={{ display:'flex',alignItems:'center',gap:5,marginBottom:8,flexWrap:'wrap' }}>
-            {scanning&&(
-              <span style={{ display:'flex',alignItems:'center',gap:4,fontFamily:'var(--mono)',fontSize:11,
-                color:'var(--amber)',background:'rgba(255,167,38,.1)',border:'1px solid var(--amber)',
-                borderRadius:8,padding:'3px 10px',flexShrink:0 }}>
-                <span style={{ display:'inline-block',animation:'spin 1s linear infinite' }}>⟳</span> LIVE {progress}%
-              </span>
-            )}
-            <span style={{ fontFamily:'var(--mono)',fontSize:17,fontWeight:800,color:'var(--text)',flexShrink:0 }}>{displayedCount}</span>
-            <span style={{ fontFamily:'var(--mono)',fontSize:13,color:'var(--text3)',flexShrink:0 }}>results</span>
-            <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
-              background:'var(--green-dim)',color:'var(--green)',border:'1px solid var(--green2)',
-              fontFamily:'var(--mono)',flexShrink:0 }}>🟢 {bullCount}</span>
-            <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
-              background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red2)',
-              fontFamily:'var(--mono)',flexShrink:0 }}>🔴 {bearCount}</span>
-            <div style={{ display:'flex',gap:3,marginLeft:'auto',flexShrink:0 }}>
-              {['list','cards'].map(v=>(
-                <button key={v} className={`btn-small ${viewMode===v?'active':''}`} onClick={()=>setViewMode(v)}
-                  style={viewMode===v?{borderColor:tabColor,color:tabColor,background:`${tabColor}15`}:{}}>
-                  {v==='list'?'≡':'⊞'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* Filter + sort row — single horizontal scrollable line */}
-          <div style={{ display:'flex',alignItems:'center',gap:4,overflowX:'auto',flexWrap:'nowrap',
-            paddingBottom:4,WebkitOverflowScrolling:'touch',scrollbarWidth:'none',msOverflowStyle:'none' }}>
-            {/* Signal / Bull / Bear filter */}
-            {[['all','Signal','var(--accent)','var(--accent-dim)'],['bull','🟢 Bull','var(--green)','var(--green-dim)'],['bear','🔴 Bear','var(--red)','var(--red-dim)']].map(([id,lbl,col,bg])=>(
-              <button key={id} onClick={()=>setResultFilter(id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(resultFilter===id?{borderColor:col,color:col,background:bg,fontWeight:700}:{}) }}>{lbl}</button>
-            ))}
-            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
-            {/* Volume filter */}
-            {VOLUME_FILTERS.map(f=>(
-              <button key={f.id} onClick={()=>setVolumeFilter(f.id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(volumeFilter===f.id?{borderColor:'var(--purple)',color:'var(--purple)',background:'var(--purple-dim)',fontWeight:700}:{}) }}>{f.label}</button>
-            ))}
-            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
-            <span style={{ fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',flexShrink:0 }}>↕</span>
-            {[['time','Time'],['symbol','Sym'],['gain','Gain'],['volume','Vol']].map(([col,label])=>(
-              <button key={col} className={`sort-btn ${sortBy===col?'active':''}`} onClick={()=>toggleSort(col)} style={{ flexShrink:0,whiteSpace:'nowrap' }}>
-                {label}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}
+        {/* Results header — full width, no box */}
+        <div style={{
+          display:'flex', alignItems:'center', gap:5, flexWrap:'nowrap',
+          overflowX:'auto', WebkitOverflowScrolling:'touch',
+          scrollbarWidth:'none', msOverflowStyle:'none',
+          marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
+          paddingBottom:4, marginBottom:8,
+        }}>
+          {scanning&&(
+            <span style={{ display:'flex',alignItems:'center',gap:4,fontFamily:'var(--mono)',fontSize:11,
+              color:'var(--amber)',background:'rgba(255,167,38,.1)',border:'1px solid var(--amber)',
+              borderRadius:8,padding:'3px 10px',flexShrink:0 }}>
+              <span style={{ display:'inline-block',animation:'spin 1s linear infinite' }}>⟳</span> LIVE {progress}%
+            </span>
+          )}
+          <span style={{ fontFamily:'var(--mono)',fontSize:17,fontWeight:800,color:'var(--text)',flexShrink:0 }}>{displayedCount}</span>
+          <span style={{ fontFamily:'var(--mono)',fontSize:13,color:'var(--text3)',flexShrink:0 }}>results</span>
+          <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
+            background:'var(--green-dim)',color:'var(--green)',border:'1px solid var(--green2)',
+            fontFamily:'var(--mono)',flexShrink:0 }}>🟢 {bullCount}</span>
+          <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
+            background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red2)',
+            fontFamily:'var(--mono)',flexShrink:0 }}>🔴 {bearCount}</span>
+          <div style={{ display:'flex',gap:3,marginLeft:'auto',flexShrink:0 }}>
+            {['list','cards'].map(v=>(
+              <button key={v} className={`btn-small ${viewMode===v?'active':''}`} onClick={()=>setViewMode(v)}
+                style={viewMode===v?{borderColor:tabColor,color:tabColor,background:`${tabColor}15`}:{}}>
+                {v==='list'?'≡':'⊞'}
               </button>
             ))}
           </div>
