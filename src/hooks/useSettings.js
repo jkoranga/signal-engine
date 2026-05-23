@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { saveSettingsToCloud, loadSettingsFromCloud } from '../firebase.js'
 
-const STORAGE_KEY = 'cfa_settings_v4'
+const STORAGE_KEY = 'signal_engine_v4'
 
 const DEFAULT_30_PAIRS = [
   'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT',

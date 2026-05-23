@@ -1,4 +1,4 @@
-// firebase.js — Signal Engine v2.0
+// firebase.js — Signal Engine v4
 // Firebase project: signal-engines
 
 import { initializeApp, getApps } from 'firebase/app'
@@ -69,7 +69,7 @@ export async function onAuthChanged(callback) {
 export async function saveSettingsToCloud(uid, settings) {
   if (!uid) return false
   try {
-    const ref = doc(db, 'users', uid, 'settings', 'ema-sigma')
+    const ref = doc(db, 'users', uid, 'settings', 'signal-engine-v4')
     // Full overwrite — no merge. We always save the complete settings object,
     // so merge:true is unnecessary and harmful: Firestore merge:true can fail
     // to overwrite arrays when the new value is [] (empty), causing stale trash
@@ -85,7 +85,7 @@ export async function saveSettingsToCloud(uid, settings) {
 export async function loadSettingsFromCloud(uid) {
   if (!uid) return null
   try {
-    const ref = doc(db, 'users', uid, 'settings', 'ema-sigma')
+    const ref = doc(db, 'users', uid, 'settings', 'signal-engine-v4')
     const snap = await getDoc(ref)
     return snap.exists() ? snap.data() : null
   } catch (e) {
