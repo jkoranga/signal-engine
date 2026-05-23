@@ -800,54 +800,6 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         ))}
       </div>
 
-      {/* ── Row 2: Bull/Bear filter | volume | sort ── */}
-      <div style={{
-        display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
-        overflowX:'auto', WebkitOverflowScrolling:'touch',
-        scrollbarWidth:'none', msOverflowStyle:'none',
-        marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
-        paddingBottom:4, marginBottom:8,
-      }}>
-        {/* Bull / Bear filter */}
-        {[['all','⬡'],['bull','🟢'],['bear','🔴']].map(([id,icon])=>(
-          <button key={id} onClick={()=>setResultFilter(id)} style={{
-            padding:'5px 9px',borderRadius:20,cursor:'pointer',fontSize:13,flexShrink:0,
-            border:`1.5px solid ${resultFilter===id?'var(--accent)':'var(--border)'}`,
-            background:resultFilter===id?'var(--accent-dim)':'var(--bg2)',
-            transition:'all .15s',
-          }}>{icon}</button>
-        ))}
-
-        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
-
-        {/* Volume filters */}
-        {VOLUME_FILTERS.map(f=>(
-          <button key={f.id} onClick={()=>setVolumeFilter(f.id)} style={{
-            padding:'5px 9px',borderRadius:20,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap',
-            border:`1.5px solid ${volumeFilter===f.id?'var(--purple)':'var(--border)'}`,
-            background:volumeFilter===f.id?'var(--purple-dim)':'var(--bg2)',
-            color:volumeFilter===f.id?'var(--purple)':'var(--text3)',
-            fontSize:10,fontFamily:'var(--mono)',fontWeight:volumeFilter===f.id?700:400,
-            transition:'all .15s',
-          }}>{f.label}</button>
-        ))}
-
-        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
-
-        {/* Sort */}
-        <span style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',flexShrink:0}}>↕</span>
-        {[['time','Time'],['symbol','Sym'],['gain','Gain%'],['volume','Vol']].map(([col,lbl])=>(
-          <button key={col} onClick={()=>toggleSort(col)} style={{
-            padding:'5px 9px',borderRadius:20,cursor:'pointer',flexShrink:0,whiteSpace:'nowrap',
-            border:`1.5px solid ${sortBy===col?tabColor:'var(--border)'}`,
-            background:sortBy===col?`${tabColor}18`:'var(--bg2)',
-            color:sortBy===col?tabColor:'var(--text3)',
-            fontSize:10,fontFamily:'var(--mono)',fontWeight:sortBy===col?700:400,
-            transition:'all .15s',
-          }}>{lbl}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}</button>
-        ))}
-      </div>
-
       {/* ── Single sym input ── */}
       {scanMode==='single'&&(
         <div style={{ display:'flex',gap:8,marginBottom:10 }}>
@@ -900,7 +852,26 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
               ))}
             </div>
           </div>
-
+          {/* Filter + sort row — single horizontal scrollable line */}
+          <div style={{ display:'flex',alignItems:'center',gap:4,overflowX:'auto',flexWrap:'nowrap',
+            paddingBottom:4,WebkitOverflowScrolling:'touch',scrollbarWidth:'none',msOverflowStyle:'none' }}>
+            {/* Signal / Bull / Bear filter */}
+            {[['all','Signal','var(--accent)','var(--accent-dim)'],['bull','🟢 Bull','var(--green)','var(--green-dim)'],['bear','🔴 Bear','var(--red)','var(--red-dim)']].map(([id,lbl,col,bg])=>(
+              <button key={id} onClick={()=>setResultFilter(id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(resultFilter===id?{borderColor:col,color:col,background:bg,fontWeight:700}:{}) }}>{lbl}</button>
+            ))}
+            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
+            {/* Volume filter */}
+            {VOLUME_FILTERS.map(f=>(
+              <button key={f.id} onClick={()=>setVolumeFilter(f.id)} className="btn-small" style={{ flexShrink:0,whiteSpace:'nowrap',...(volumeFilter===f.id?{borderColor:'var(--purple)',color:'var(--purple)',background:'var(--purple-dim)',fontWeight:700}:{}) }}>{f.label}</button>
+            ))}
+            <div style={{ width:1,height:16,background:'var(--border)',flexShrink:0,margin:'0 3px' }}/>
+            <span style={{ fontSize:10,fontFamily:'var(--mono)',color:'var(--text3)',flexShrink:0 }}>↕</span>
+            {[['time','Time'],['symbol','Sym'],['gain','Gain'],['volume','Vol']].map(([col,label])=>(
+              <button key={col} className={`sort-btn ${sortBy===col?'active':''}`} onClick={()=>toggleSort(col)} style={{ flexShrink:0,whiteSpace:'nowrap' }}>
+                {label}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}
+              </button>
+            ))}
+          </div>
         </div>
 
         {displayedCount===0 ? (

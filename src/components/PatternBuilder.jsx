@@ -84,54 +84,6 @@ const ICON_CATEGORIES = [
   { label: '🎰 Fun',      icons: ['🎰','🎲','🎯','🃏','🎪','🎭','🎬','🎵','🎸','🥂','🍀','🦋'] },
 ]
 
-// ── Built-in example patterns ────────────────────────────────────────────────
-const EXAMPLE_PATTERNS = [
-  {
-    id: 'example_1h_ema20_slope_bull',
-    name: '[1h] EMA20 Slope ≥ +2%',
-    side: 'bull', icon: '📐',
-    tfs: ['1h'],
-    enabled: true,
-    createdAt: Date.now(),
-    conditions: [
-      {
-        id: 'ex_slope_c1',
-        enabled: true, joinNext: 'AND',
-        groupId: null, label: 'EMA20 slope up ≥ 2% over 10 candles',
-        lhsField: 'ema20', lhsOffset: 0,
-        op: '>=',
-        rhsMode: 'slope',
-        rhsField: 'ema20', rhsOffset: 0,
-        rhsNum: 0, rhsMult: 1, rhsPct: 0,
-        slopeLen: 10, slopeSkip: 0, slopeNum: 2,
-        rangeCheck: false, rangeFrom: -1, rangeTo: -5, rangeMode: 'all',
-      }
-    ],
-  },
-  {
-    id: 'example_1h_ema20_slope_bear',
-    name: '[1h] EMA20 Slope ≤ −2%',
-    side: 'bear', icon: '📐',
-    tfs: ['1h'],
-    enabled: true,
-    createdAt: Date.now(),
-    conditions: [
-      {
-        id: 'ex_slope_c2',
-        enabled: true, joinNext: 'AND',
-        groupId: null, label: 'EMA20 slope down ≤ −2% over 10 candles',
-        lhsField: 'ema20', lhsOffset: 0,
-        op: '<=',
-        rhsMode: 'slope',
-        rhsField: 'ema20', rhsOffset: 0,
-        rhsNum: 0, rhsMult: 1, rhsPct: 0,
-        slopeLen: 10, slopeSkip: 0, slopeNum: -2,
-        rangeCheck: false, rangeFrom: -1, rangeTo: -5, rangeMode: 'all',
-      }
-    ],
-  },
-]
-
 const G = 'var(--green)'
 const R = 'var(--red)'
 const A = '#b388ff'
@@ -178,48 +130,54 @@ function mirrorCond(cond) {
   const mirroredLhs = MIRROR_FIELD[cond.lhsField] ?? cond.lhsField
   const mirroredRhs = MIRROR_FIELD[cond.rhsField] ?? cond.rhsField
 
-  // ── RSI special mirror: reflect around midline 50 ────────────────────────
-  // Bull RSI 60 (50+10) → Bear RSI 40 (50-10)  formula: 100 - value
-  // Bull RSI 70 (50+20) → Bear RSI 30 (50-20)
-  // RSI 50 → RSI 50 (midline stays the same)
-  // Operator also flips: > becomes <  etc.
-  const isRsiCond = cond.lhsField === 'rsi'
-  if (isRsiCond && cond.rhsMode === 'number') {
-    const mirroredValue = parseFloat((100 - parseFloat(cond.rhsNum)).toFixed(4))
-    return {
-      ...cond,
-      id: uid(),
-      op: MIRROR_OP[cond.op] ?? cond.op,
-      rhsNum: mirroredValue,
-      label: cond.label ? `Mirror of ${cond.label}` : '',
-    }
-  }
+  // Wick swap: lowerWick <-> upperWick — same measurement direction, keep sign & op
+  const wickSwap = cond.lhsField !== mirroredLhs &&
+    (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')
 
-  // ── Symmetric fields — keep value & operator unchanged ───────────────────
-  // These fields mean the same on both sides: body, bodyPct, volume, ADX, etc.
-  // e.g. Body Size > 80% mirrors to Body Size > 80% (not Body Size > -80%)
-  const SYMMETRIC_FIELDS = new Set([
-    'body', 'bodyPct', 'rangeHL', 'volume', 'adx', 'diPos', 'diNeg',
-    'change', 'change24h', 'isGreen', 'isRed',
+  // Size/magnitude fields are always absolute positive values (0-100 range, no negatives).
+  // Body%, Body, Range, Wick sizes, IsGreen/IsRed — keep RHS sign and operator on mirror.
+  // Bull Body% > 90  →  Bear Body% > 90  (same threshold, not -90)
+  // Size/magnitude fields — always absolute positive (0-100), keep value & op
+  const SIZE_FIELDS = new Set([
+    'body','bodyPct','range','rangePct',
+    'upperWick','lowerWick','wickPct',
+    'isGreen','isRed','volume',
   ])
-  const keepSign = (cond.lhsField !== mirroredLhs &&
-    (cond.lhsField === 'lowerWick' || cond.lhsField === 'upperWick')) ||
-    SYMMETRIC_FIELDS.has(cond.lhsField)
+  const isSizeField = SIZE_FIELDS.has(cond.lhsField)
 
-  // Invert multiplier: × 1.005 → × (1/1.005) = × 0.995
+  // RSI mirrors around 50 (the neutral midpoint):
+  //   Bull RSI > 60  →  Bear RSI < 40   (100 - 60 = 40)
+  //   Bull RSI > 70  →  Bear RSI < 30   (100 - 70 = 30)
+  //   Bull RSI = 50  →  Bear RSI = 50   (symmetric)
+  const isRsiField = cond.lhsField === 'rsi'
+
+  const keepSign = wickSwap || isSizeField
+  const keepOp   = isSizeField || wickSwap
+
+  // Invert multiplier for non-size, non-RSI fields
   const rhsMult = cond.rhsMult != null
-    ? parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6))
+    ? (isSizeField || isRsiField ? parseFloat(cond.rhsMult) : parseFloat((1 / parseFloat(cond.rhsMult)).toFixed(6)))
     : cond.rhsMult
 
-  // keepSign: preserve value as-is.  Others: negate.
-  const rhsNum   = cond.rhsNum   != null ? (keepSign ? parseFloat(cond.rhsNum)   : -parseFloat(cond.rhsNum))   : cond.rhsNum
+  // RSI: mirror rhsNum around 50; others: keep or negate
+  const rhsNum = cond.rhsNum != null
+    ? (isRsiField
+        ? parseFloat((100 - parseFloat(cond.rhsNum)).toFixed(4))
+        : keepSign ? parseFloat(cond.rhsNum) : -parseFloat(cond.rhsNum))
+    : cond.rhsNum
+
   const rhsPct   = cond.rhsPct   != null ? (keepSign ? parseFloat(cond.rhsPct)   : -parseFloat(cond.rhsPct))   : cond.rhsPct
   const slopeNum = cond.slopeNum != null ? (keepSign ? parseFloat(cond.slopeNum) : -parseFloat(cond.slopeNum)) : cond.slopeNum
+
+  // RSI flips operator (> 60 → < 40); size fields keep op; others flip
+  const finalOp = isRsiField
+    ? (MIRROR_OP[cond.op] ?? cond.op)
+    : keepOp ? cond.op : (MIRROR_OP[cond.op] ?? cond.op)
 
   return {
     ...cond,
     id: uid(),
-    op: keepSign ? cond.op : (MIRROR_OP[cond.op] ?? cond.op),
+    op: finalOp,
     lhsField: mirroredLhs,
     rhsField: mirroredRhs,
     rhsMult,
@@ -705,9 +663,9 @@ function JoinBadge({ value, onChange, onGroupToggle, grouped, groupColor }) {
 
 // ── Condition card ────────────────────────────────────────────────────────────
 function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveUp, onMoveDown, open, onToggleOpen }) {
-  const [confirmRemove, setConfirmRemove] = React.useState(false)
   function s(k, v) { onChange({ ...cond, [k]: v }) }
   const formula = condFormula(cond)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
     <div style={{
@@ -762,13 +720,13 @@ function CondCard({ cond, idx, total, color, onChange, onRemove, onCopy, onMoveU
           {idx > 0        && <IBtn onClick={onMoveUp}   title="Move up">↑</IBtn>}
           {idx < total-1  && <IBtn onClick={onMoveDown} title="Move down">↓</IBtn>}
           <IBtn onClick={onCopy}   title="Duplicate condition" col={BLU}>⧉</IBtn>
-          {confirmRemove ? (
+          {confirmDelete ? (
             <>
-              <IBtn onClick={() => { onRemove(); setConfirmRemove(false) }} title="Confirm delete" col="var(--red)">✓</IBtn>
-              <IBtn onClick={() => setConfirmRemove(false)} title="Cancel" col="var(--text3)">✕</IBtn>
+              <IBtn onClick={onRemove} title="Confirm delete" col="var(--red)" style={{ padding: '0 7px', fontSize: 9, fontWeight: 800, letterSpacing: '.03em' }}>DEL?</IBtn>
+              <IBtn onClick={() => setConfirmDelete(false)} title="Cancel" col="var(--text3)">✕</IBtn>
             </>
           ) : (
-            <IBtn onClick={() => setConfirmRemove(true)} title="Delete condition" col="var(--red)">×</IBtn>
+            <IBtn onClick={() => setConfirmDelete(true)} title="Delete" col="var(--red)">×</IBtn>
           )}
         </div>
         <span onClick={onToggleOpen} style={{ color:'var(--text3)', fontSize:11, cursor:'pointer', flexShrink:0 }}>
@@ -1235,8 +1193,13 @@ function IconPicker({ value, onChange, color }) {
 }
 
 // ── Pattern editor ────────────────────────────────────────────────────────────
-function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames, selectionMode, isSelected, onToggleSelect, onMoveUp, onMoveDown, isFirst, isLast }) {
-  const [open, setOpen] = useState(!!defaultOpen)
+function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPattern, defaultOpen, allPatternNames, onOpenChange }) {
+  const [open, setOpenRaw] = useState(!!defaultOpen)
+  function setOpen(v) {
+    const next = typeof v === 'function' ? v(open) : v
+    setOpenRaw(next)
+    onOpenChange?.(next)
+  }
   const [openCondIds, setOpenCondIds] = useState(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [lockPopup, setLockPopup] = useState(false)
@@ -1520,73 +1483,53 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
       transition: 'opacity .15s, border .2s, box-shadow .2s',
       pointerEvents: mirrorPopup || copyPopup || lockPopup ? 'none' : 'auto',
     }}>
-      {/* Header */}
-      {/* ── Header: row1 = controls+icon+name+chevron  row2 = action buttons ── */}
-      <div style={{
-        background: pattern.enabled
-          ? pattern.side === 'bull' ? 'rgba(0,230,118,0.07)' : 'rgba(255,60,80,0.07)'
-          : 'transparent',
-      }}>
-        {/* Row 1 — tap to open/close */}
-        <div
-          onClick={() => pattern.locked ? setLockPopup(true) : setOpen(o => !o)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 4px', cursor: 'pointer' }}
-        >
-          {/* Reorder or checkbox — hidden when pattern is open/expanded */}
-          {!open && (selectionMode ? (
-            <div
-              onClick={e => { e.stopPropagation(); onToggleSelect && onToggleSelect() }}
-              style={{
-                width: 22, height: 22, borderRadius: 5, flexShrink: 0,
-                border: `2px solid ${isSelected ? '#ffa000' : 'rgba(255,255,255,0.3)'}`,
-                background: isSelected ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.06)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .15s',
-              }}
-            >
-              {isSelected && (
-                <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
-                  <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="#ffa000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}
-                 onClick={e => e.stopPropagation()}>
-              <button onClick={() => onMoveUp && onMoveUp()} style={{
-                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
-                background: isFirst ? 'transparent' : 'rgba(255,255,255,0.1)',
-                cursor: isFirst ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                opacity: isFirst ? 0.15 : 1,
-              }}><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↑</span></button>
-              <button onClick={() => onMoveDown && onMoveDown()} style={{
-                width: 24, height: 18, borderRadius: 4, padding: 0, border: 'none',
-                background: isLast ? 'transparent' : 'rgba(255,255,255,0.1)',
-                cursor: isLast ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                opacity: isLast ? 0.15 : 1,
-              }}><span style={{ fontSize: 12, color: '#fff', lineHeight: 1 }}>↓</span></button>
-            </div>
-          ))}
+      {/* Header — icon + name + subtitle + lock + toggle only */}
+      <div
+        onClick={() => pattern.locked ? setLockPopup(true) : setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 9, padding: '12px 13px', cursor: 'pointer',
+          background: pattern.enabled
+            ? pattern.side === 'bull' ? 'rgba(0,230,118,0.07)' : 'rgba(255,60,80,0.07)'
+            : 'transparent',
+        }}
+      >
+        <span style={{ fontSize: 22, flexShrink: 0 }}>{pattern.icon}</span>
 
-          {/* Icon */}
-          <span style={{ fontSize: 22, flexShrink: 0 }}>{pattern.icon}</span>
-
-          {/* Name + meta — full width, single line */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontWeight: 800, fontSize: 13, color: pattern.enabled ? color : 'var(--text2)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{pattern.name}</div>
-            <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
-              {pattern.side.toUpperCase()} · {active} cond{active !== 1 ? 's' : ''} · {pattern.tfs.join(' ') || 'no TF'}
-            </div>
+        {/* Name + subtitle — takes all available space */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontWeight: 800, fontSize: 15, color: pattern.enabled ? color : 'var(--text2)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{pattern.name}</div>
+          <div style={{
+            fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 3,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {pattern.side.toUpperCase()} · {active} cond{active !== 1 ? 's' : ''} · {pattern.tfs.join(' ') || 'no TF'}
           </div>
+        </div>
+
+        {/* Right side: lock + toggle + chevron */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+          {/* Lock */}
+          <button
+            onClick={() => pattern.locked ? setLockPopup(true) : s('locked', true)}
+            title={pattern.locked ? 'Locked — tap to unlock' : 'Lock pattern'}
+            style={{
+              width: 28, height: 28, borderRadius: 7,
+              border: `1px solid ${pattern.locked ? 'rgba(255,200,0,0.6)' : 'rgba(180,180,180,0.25)'}`,
+              background: pattern.locked ? 'rgba(255,200,0,0.15)' : 'transparent',
+              color: pattern.locked ? 'rgb(255,200,0)' : 'var(--text3)',
+              cursor: 'pointer', fontSize: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: pattern.locked ? '0 0 8px rgba(255,200,0,0.35)' : 'none',
+              transition: 'all .2s',
+            }}
+          >{pattern.locked ? '🔒' : '🔓'}</button>
 
           {/* Enable toggle */}
-          <div onClick={e => { e.stopPropagation(); !pattern.locked && s('enabled', !pattern.enabled) }} style={{
-            width: 34, height: 19, borderRadius: 10, flexShrink: 0,
+          <div onClick={() => !pattern.locked && s('enabled', !pattern.enabled)} style={{
+            width: 36, height: 20, borderRadius: 10,
             cursor: pattern.locked ? 'not-allowed' : 'pointer',
             background: pattern.enabled ? color : 'var(--bg3)',
             border: `1.5px solid ${pattern.enabled ? color : 'var(--border)'}`,
@@ -1594,87 +1537,76 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
             opacity: pattern.locked ? 0.4 : 1,
           }}>
             <div style={{
-              position: 'absolute', top: 3, left: pattern.enabled ? 16 : 3,
-              width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .2s',
+              position: 'absolute', top: 3, left: pattern.enabled ? 17 : 3,
+              width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left .2s',
             }} />
           </div>
-
-          {/* Chevron */}
-          <span style={{ color: pattern.locked ? 'rgba(255,200,0,0.6)' : 'var(--text3)', fontSize: 11, flexShrink: 0 }}>
-            {pattern.locked ? '🔒' : open ? '▲' : '▼'}
-          </span>
         </div>
 
-        {/* Row 2 — action buttons, always visible, stop propagation */}
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px 8px', paddingLeft: open ? 12 : 64 }}
-        >
-          {/* Lock */}
-          <button
-            onClick={() => pattern.locked ? setLockPopup(true) : s('locked', true)}
-            title={pattern.locked ? 'Locked — tap to unlock' : 'Lock pattern'}
-            style={{
-              width: 30, height: 26, borderRadius: 7, flexShrink: 0,
-              border: `1px solid ${pattern.locked ? 'rgba(255,200,0,0.6)' : 'rgba(180,180,180,0.2)'}`,
-              background: pattern.locked ? 'rgba(255,200,0,0.15)' : 'rgba(255,255,255,0.04)',
-              color: pattern.locked ? 'rgb(255,200,0)' : 'var(--text3)',
-              cursor: 'pointer', fontSize: 13,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >{pattern.locked ? '🔒' : '🔓'}</button>
+        <span style={{ color: pattern.locked ? 'rgba(255,200,0,0.6)' : 'var(--text3)', fontSize: 12, flexShrink: 0 }}>
+          {pattern.locked ? '' : open ? '▲' : '▼'}
+        </span>
+      </div>
 
+      {/* Action bar — mirror / copy / delete — shown below header, same row as locked hint */}
+      {!pattern.locked && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 13px 8px',
+          borderTop: `1px solid ${color}22`,
+          background: 'rgba(0,0,0,0.12)',
+        }} onClick={e => e.stopPropagation()}>
           {/* Mirror */}
-          {!pattern.locked && (
-            <button onClick={() => {
-              const names = (allPatternNames || []).map(n => n.toLowerCase())
-              if (!names.includes(mirroredDefaultName.toLowerCase())) { onMirrorPattern(mirroredDefaultName) }
-              else { setMirrorPopup(true) }
-            }} title="Mirror pattern" style={{
-              width: 30, height: 26, borderRadius: 7, flexShrink: 0,
-              border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
-              color: BLU, cursor: 'pointer', fontSize: 14,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
-            }}>⇄</button>
-          )}
+          <button onClick={() => {
+            const names = (allPatternNames || []).map(n => n.toLowerCase())
+            if (!names.includes(mirroredDefaultName.toLowerCase())) {
+              onMirrorPattern(mirroredDefaultName)
+            } else {
+              setMirrorPopup(true)
+            }
+          }} title="Mirror pattern (Bull↔Bear + flip operators)" style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
+            border: '1px solid rgba(100,180,255,0.35)', background: 'rgba(100,180,255,0.08)',
+            color: BLU, fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 700,
+          }}>⇄ Mirror</button>
 
           {/* Copy */}
-          {!pattern.locked && (
-            <button onClick={() => setCopyPopup(true)} title="Copy pattern" style={{
-              width: 30, height: 26, borderRadius: 7, flexShrink: 0,
-              border: '1px solid rgba(255,200,0,0.35)', background: 'rgba(255,200,0,0.08)',
-              color: 'rgb(255,200,0)', cursor: 'pointer', fontSize: 14,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
-            }}>⧉</button>
-          )}
+          <button onClick={() => setCopyPopup(true)} title="Copy pattern" style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
+            border: '1px solid rgba(255,200,0,0.35)', background: 'rgba(255,200,0,0.08)',
+            color: 'rgb(255,200,0)', fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 700,
+          }}>⧉ Copy</button>
 
           {/* Delete */}
-          {!pattern.locked && (
-            confirmDelete ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ marginLeft: 'auto' }}>
+            {confirmDelete ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)', whiteSpace: 'nowrap' }}>Delete?</span>
                 <button onClick={onDelete} style={{
-                  padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
                   fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
-                  border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)', color: 'var(--red)',
+                  border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)',
+                  color: 'var(--red)',
                 }}>Yes</button>
                 <button onClick={() => setConfirmDelete(false)} style={{
-                  padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                  padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
                   fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 800,
-                  border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text2)',
+                  border: '1px solid var(--border)', background: 'var(--bg3)',
+                  color: 'var(--text2)',
                 }}>No</button>
               </div>
             ) : (
               <button onClick={() => setConfirmDelete(true)} style={{
-                width: 30, height: 26, borderRadius: 7, flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 7, cursor: 'pointer',
                 border: '1px solid rgba(255,60,60,0.3)', background: 'rgba(255,60,60,0.07)',
-                color: 'var(--red)', cursor: 'pointer', fontSize: 14,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>🗑</button>
-            )
-          )}
+                color: 'var(--red)', fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 700,
+              }}>🗑 Delete</button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Body */}
       {/* Locked banner */}
@@ -1927,6 +1859,7 @@ export default function PatternBuilderTab({ settings, update }) {
   const patterns = useMemo(() => settings.customPatterns || [], [settings.customPatterns])
   const trash    = useMemo(() => settings.deletedPatterns || [], [settings.deletedPatterns])
   const [newId, setNewId] = useState(null)
+  const [openPatternId, setOpenPatternId] = useState(null)
   const [trashOpen, setTrashOpen] = useState(false)
   const [confirmPurgeId, setConfirmPurgeId] = useState(null)
   const [confirmPurgeAll, setConfirmPurgeAll] = useState(false)
@@ -1959,7 +1892,7 @@ export default function PatternBuilderTab({ settings, update }) {
     update({ deletedPatterns: ts, _deletedPatternsAt: now })
   }
 
-  function add() { const p = blankPattern(); setNewId(p.id); savePatterns([...patterns, p]) }
+  function add() { const p = blankPattern(); setNewId(p.id); setOpenPatternId(p.id); savePatterns([...patterns, p]) }
 
   // upd() is called on every keystroke (name input, condition values).
   // Each call saves the full updated pattern list to state + Firebase immediately.
@@ -2038,35 +1971,21 @@ export default function PatternBuilderTab({ settings, update }) {
   const [importError, setImportError] = useState('')
   const [importSuccess, setImportSuccess] = useState('')
   const [importPopup, setImportPopup] = useState(false)
-  const [examplesPopup, setExamplesPopup] = useState(false)
   const importInputRef = React.useRef(null)
-
-  function loadExample(ex) {
-    const fresh = { ...ex, id: `custom_${uid()}`, createdAt: Date.now(),
-      conditions: ex.conditions.map(c => ({ ...c, id: uid() })) }
-    const exists = patterns.some(p => p.name.toLowerCase() === fresh.name.toLowerCase())
-    if (exists) { setImportError(`"${fresh.name}" already exists`); return }
-    savePatterns([...patterns, fresh])
-    setImportSuccess(`✅ "${fresh.name}" added`)
-    setExamplesPopup(false)
-  }
 
   // ── Selection state for bulk export ──────────────────────────────────────
   const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedIds, setSelectedIds]     = useState([])
+  const [selectedIds, setSelectedIds]     = useState(new Set())
   const [exportPopup, setExportPopup]     = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
-
-  const isSelected  = id => selectedIds.includes(id)
-  const selectedCnt = selectedIds.length
+  const [deleteConfirm, setDeleteConfirm] = useState(false)   // bulk-delete confirm
 
   function toggleSelect(id) {
     setDeleteConfirm(false)
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-  function selectAll()  { setDeleteConfirm(false); setSelectedIds(patterns.map(p => p.id)) }
-  function selectNone() { setDeleteConfirm(false); setSelectedIds([]) }
-  function exitSelectionMode() { setSelectionMode(false); setSelectedIds([]); setDeleteConfirm(false) }
+  function selectAll()  { setDeleteConfirm(false); setSelectedIds(new Set(patterns.map(p => p.id))) }
+  function selectNone() { setDeleteConfirm(false); setSelectedIds(new Set()) }
+  function exitSelectionMode() { setSelectionMode(false); setSelectedIds(new Set()); setDeleteConfirm(false) }
 
   // Move a pattern up or down in the list
   function movePattern(fromIdx, dir) {
@@ -2080,9 +1999,9 @@ export default function PatternBuilderTab({ settings, update }) {
   // Bulk-delete selected patterns (move to trash like normal del)
   function deleteSelected() {
     const now = Date.now()
-    const removed  = patterns.filter(p => selectedIds.includes(p.id)).map(p => ({ ...p, deletedAt: now }))
+    const removed  = patterns.filter(p => selectedIds.has(p.id)).map(p => ({ ...p, deletedAt: now }))
     const newTrash = [...removed, ...trash].slice(0, 50)
-    const newPats  = patterns.filter(p => !selectedIds.includes(p.id))
+    const newPats  = patterns.filter(p => !selectedIds.has(p.id))
     saveBoth(newPats, newTrash)
     exitSelectionMode()
   }
@@ -2130,7 +2049,7 @@ export default function PatternBuilderTab({ settings, update }) {
   // The main "Export" button click — if nothing selected, export all combined
   function exportPatterns() {
     if (selectionMode) {
-      const chosen = patterns.filter(p => isSelected(p.id))
+      const chosen = patterns.filter(p => selectedIds.has(p.id))
       if (chosen.length === 0) return
       setExportPopup(true)
     } else {
@@ -2187,7 +2106,7 @@ export default function PatternBuilderTab({ settings, update }) {
 
       {/* ── Export mode popup ── */}
       {exportPopup && (() => {
-        const chosen = patterns.filter(p => isSelected(p.id))
+        const chosen = patterns.filter(p => selectedIds.has(p.id))
         return (
           <>
             <div onClick={() => setExportPopup(false)} style={{
@@ -2268,70 +2187,6 @@ export default function PatternBuilderTab({ settings, update }) {
           </>
         )
       })()}
-
-      {/* Examples popup */}
-      {examplesPopup && (
-        <>
-          <div onClick={() => setExamplesPopup(false)} style={{
-            position: 'fixed', inset: 0, zIndex: 299, background: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(4px)',
-          }} />
-          <div style={{
-            position: 'fixed', left: '50%', top: '50%',
-            transform: 'translate(-50%,-50%)',
-            zIndex: 300, width: 'min(360px, 93vw)',
-            borderRadius: 16, padding: '20px 16px',
-            background: 'var(--bg1)',
-            border: '1.5px solid rgba(77,171,247,0.4)',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: 14 }}>
-              <div style={{ fontSize: 28, marginBottom: 6 }}>📐</div>
-              <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--text)' }}>Example Patterns</div>
-              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 4, lineHeight: 1.6 }}>
-                Tap any example to add it to your patterns
-              </div>
-            </div>
-            <div style={{ height: 1, background: 'var(--border)', marginBottom: 12 }} />
-            {importError && (
-              <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--red)',
-                padding: '6px 10px', borderRadius: 7, marginBottom: 10,
-                background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.3)',
-              }}>⚠ {importError}</div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              {EXAMPLE_PATTERNS.map(ex => (
-                <button key={ex.id} onClick={() => loadExample(ex)} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
-                  border: `1px solid ${ex.side === 'bull' ? 'rgba(0,230,118,0.3)' : 'rgba(255,60,80,0.3)'}`,
-                  background: ex.side === 'bull' ? 'rgba(0,230,118,0.05)' : 'rgba(255,60,80,0.05)',
-                }}>
-                  <span style={{ fontSize: 22, flexShrink: 0 }}>{ex.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 12, fontFamily: 'var(--mono)',
-                      color: ex.side === 'bull' ? G : R, marginBottom: 2 }}>{ex.name}</div>
-                    <div style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', lineHeight: 1.5 }}>
-                      {ex.tfs.join(' ')} · {ex.side.toUpperCase()} · {ex.conditions.length} condition
-                      {ex.conditions.map(c => (
-                        <span key={c.id} style={{ display: 'block', marginTop: 2, color: 'var(--text2)' }}>
-                          {FIELD_MAP[c.lhsField]?.short || c.lhsField} slope {c.op} {c.slopeNum}% over {c.slopeLen} candles
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 16, color: ex.side === 'bull' ? G : R, flexShrink: 0 }}>+</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => { setExamplesPopup(false); setImportError('') }} style={{
-              width: '100%', padding: '10px', borderRadius: 10, cursor: 'pointer',
-              fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11,
-              border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text3)',
-            }}>Close</button>
-          </div>
-        </>
-      )}
 
       {/* Import popup modal */}
       {importPopup && (
@@ -2425,20 +2280,19 @@ export default function PatternBuilderTab({ settings, update }) {
           {/* Export button */}
           <button
             onClick={exportPatterns}
-            disabled={patterns.length === 0 || (selectionMode && selectedCnt === 0)}
-            title={selectionMode ? `Export ${selectedCnt} selected pattern(s)` : 'Export all patterns as JSON backup'}
+            disabled={patterns.length === 0 || (selectionMode && selectedIds.size === 0)}
+            title={selectionMode ? `Export ${selectedIds.size} selected pattern(s)` : 'Export all patterns as JSON backup'}
             style={{
               padding: '4px 10px', borderRadius: 7,
-              cursor: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'not-allowed' : 'pointer',
+              cursor: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'not-allowed' : 'pointer',
               fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
               border: '1px solid rgba(0,230,118,0.4)',
-              background: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'transparent' : 'rgba(0,230,118,0.08)',
-              color: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 'var(--text3)' : G,
-              opacity: (patterns.length === 0 || (selectionMode && selectedCnt === 0)) ? 0.4 : 1,
+              background: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'transparent' : 'rgba(0,230,118,0.08)',
+              color: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 'var(--text3)' : G,
+              opacity: (patterns.length === 0 || (selectionMode && selectedIds.size === 0)) ? 0.4 : 1,
               display: 'flex', alignItems: 'center', gap: 4,
             }}
-          >📤 {selectionMode && selectedCnt > 0 ? `Export (${selectedCnt})` : 'Export'}</button>
-
+          >📤 {selectionMode && selectedIds.size > 0 ? `Export (${selectedIds.size})` : 'Export'}</button>
           {/* Import button */}
           <button
             onClick={() => { setImportError(''); setImportSuccess(''); setImportPopup(true) }}
@@ -2464,7 +2318,7 @@ export default function PatternBuilderTab({ settings, update }) {
           {/* Top row — count + all/none */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid rgba(255,160,0,0.15)' }}>
             <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: AMB, fontWeight: 800 }}>
-              {selectedCnt === 0 ? '☑ Tap patterns below to select' : `✅ ${selectedCnt} of ${patterns.length} selected`}
+              {selectedIds.size === 0 ? '☑ Tap patterns below to select' : `✅ ${selectedIds.size} of ${patterns.length} selected`}
             </span>
             <div style={{ flex: 1 }} />
             <button onClick={selectAll} style={{
@@ -2480,7 +2334,7 @@ export default function PatternBuilderTab({ settings, update }) {
           </div>
 
           {/* Action row — Export + Delete (only when something selected) */}
-          {selectedCnt > 0 && (
+          {selectedIds.size > 0 && (
             <div style={{ display: 'flex', gap: 8, padding: '8px 12px' }}>
               {/* Export selected */}
               <button onClick={exportPatterns} style={{
@@ -2488,7 +2342,7 @@ export default function PatternBuilderTab({ settings, update }) {
                 fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
                 border: '1px solid rgba(0,230,118,0.4)', background: 'rgba(0,230,118,0.08)', color: G,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-              }}>📤 Export ({selectedCnt})</button>
+              }}>📤 Export ({selectedIds.size})</button>
 
               {/* Delete selected — two-step confirm */}
               {!deleteConfirm ? (
@@ -2497,7 +2351,7 @@ export default function PatternBuilderTab({ settings, update }) {
                   fontFamily: 'var(--mono)', fontWeight: 800, fontSize: 11,
                   border: '1px solid rgba(255,60,80,0.4)', background: 'rgba(255,60,80,0.06)', color: R,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                }}>🗑 Delete ({selectedCnt})</button>
+                }}>🗑 Delete ({selectedIds.size})</button>
               ) : (
                 <div style={{ flex: 1, display: 'flex', gap: 5 }}>
                   <button onClick={deleteSelected} style={{
@@ -2551,25 +2405,141 @@ export default function PatternBuilderTab({ settings, update }) {
             </span>
             <div style={{ flex: 1, height: 1, background: 'var(--lime-dim)' }} />
           </div>
+
+          {/* ── Horizontal name strip — tap to jump to pattern ── */}
+          {patterns.length > 1 && (
+            <div style={{
+              display: 'flex', gap: 5, overflowX: 'auto', flexWrap: 'nowrap',
+              marginBottom: 10, paddingBottom: 4,
+              scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+              marginLeft: -10, marginRight: -10, paddingLeft: 10, paddingRight: 10,
+            }}>
+              {patterns.map(p => {
+                const isBull = p.side === 'bull'
+                const col = isBull ? 'var(--green)' : 'var(--red)'
+                const bd  = isBull ? 'rgba(0,230,118,0.4)' : 'rgba(255,60,80,0.4)'
+                const bg  = isBull ? 'rgba(0,230,118,0.08)' : 'rgba(255,60,80,0.08)'
+                const isActive = openPatternId === p.id
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setOpenPatternId(p.id)
+                      // Scroll to pattern card
+                      setTimeout(() => {
+                        const el = document.getElementById(`pattern-card-${p.id}`)
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }, 60)
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                      padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+                      border: `1.5px solid ${isActive ? bd : 'var(--border)'}`,
+                      background: isActive ? bg : 'var(--bg2)',
+                      color: isActive ? col : 'var(--text3)',
+                      fontSize: 11, fontFamily: 'var(--mono)', fontWeight: isActive ? 800 : 400,
+                      whiteSpace: 'nowrap', maxWidth: 140, transition: 'all .12s',
+                    }}
+                  >
+                    <span style={{ fontSize: 13 }}>{p.icon || (isBull ? '🟢' : '🔴')}</span>
+                    <span style={{
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      maxWidth: 100,
+                    }}>{p.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 10 }}>
-            {patterns.map((p, i) => (
-              <div key={p.id}>
+            {patterns.map((p, i) => {
+              const isOpen = openPatternId === p.id
+              return (
+              <div key={p.id} id={`pattern-card-${p.id}`} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
+
+                {/* ── Left gutter — hidden when pattern is open for full-width edit ── */}
+                {!isOpen && (
+                <div style={{
+                  flexShrink: 0, width: 28,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 4, paddingRight: 4,
+                }}>
+                  {selectionMode ? (
+                    /* Checkbox */
+                    <div
+                      onClick={() => toggleSelect(p.id)}
+                      style={{
+                        width: 22, height: 22, borderRadius: 6,
+                        border: `2px solid ${selectedIds.has(p.id) ? AMB : 'rgba(255,255,255,0.2)'}`,
+                        background: selectedIds.has(p.id) ? 'rgba(255,160,0,0.22)' : 'rgba(255,255,255,0.04)',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all .15s', flexShrink: 0,
+                      }}
+                    >
+                      {selectedIds.has(p.id) && (
+                        <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
+                          <polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke={AMB} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                  ) : (
+                    /* ▲ index ▼ */
+                    <>
+                      <button
+                        onClick={() => movePattern(i, -1)}
+                        disabled={i === 0}
+                        title="Move up"
+                        style={{
+                          width: 24, height: 24, borderRadius: 6, padding: 0,
+                          border: `1px solid ${i === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)'}`,
+                          background: i === 0 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                          cursor: i === 0 ? 'default' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          opacity: i === 0 ? 0.2 : 1,
+                        }}
+                      >
+                        <span style={{ fontSize: 13, lineHeight: 1, color: 'var(--text2)', fontWeight: 700 }}>↑</span>
+                      </button>
+
+                      <span style={{
+                        fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 800,
+                        color: 'var(--text3)', lineHeight: 1, userSelect: 'none',
+                      }}>{i + 1}</span>
+
+                      <button
+                        onClick={() => movePattern(i, +1)}
+                        disabled={i === patterns.length - 1}
+                        title="Move down"
+                        style={{
+                          width: 24, height: 24, borderRadius: 6, padding: 0,
+                          border: `1px solid ${i === patterns.length - 1 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.18)'}`,
+                          background: i === patterns.length - 1 ? 'transparent' : 'rgba(255,255,255,0.05)',
+                          cursor: i === patterns.length - 1 ? 'default' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          opacity: i === patterns.length - 1 ? 0.2 : 1,
+                        }}
+                      >
+                        <span style={{ fontSize: 13, lineHeight: 1, color: 'var(--text2)', fontWeight: 700 }}>↓</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+                )}
+
+                {/* ── Pattern card ── */}
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <PatternEditor
-                    key={p.id} pattern={p} defaultOpen={p.id === newId}
+                    key={p.id} pattern={p} defaultOpen={p.id === newId || p.id === openPatternId}
                     onChange={np => upd(i, np)} onDelete={() => del(i)}
                     onMirrorPattern={(name) => mirrorPattern(i, name)}
                     onCopyPattern={(name) => copyPattern(i, name)}
                     allPatternNames={patterns.map(x => x.name)}
-                    selectionMode={selectionMode}
-                    isSelected={isSelected(p.id)}
-                    onToggleSelect={() => toggleSelect(p.id)}
-                    onMoveUp={() => movePattern(i, -1)}
-                    onMoveDown={() => movePattern(i, +1)}
-                    isFirst={i === 0}
-                    isLast={i === patterns.length - 1}
+                    onOpenChange={(isNowOpen) => setOpenPatternId(isNowOpen ? p.id : null)}
                   />
+                </div>
               </div>
-            ))}
+            )})}
           </div>
         </>
       )}
