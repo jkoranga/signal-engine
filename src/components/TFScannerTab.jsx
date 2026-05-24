@@ -800,7 +800,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         ))}
       </div>
 
-      {/* ── Row 2: filter + vol + result counts + view toggle — all in one ── */}
+      {/* ── Row 2: filter + vol + sort + view toggle ── */}
       <div style={{
         display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
         overflowX:'auto', WebkitOverflowScrolling:'touch',
@@ -808,16 +808,20 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
         paddingBottom:4, marginBottom:8,
       }}>
-        {/* All / 🟢 / 🔴 result filter */}
-        {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,icon])=>(
+        {/* All(N) / 🟢N / 🔴N — counts embedded in filter buttons */}
+        {[
+          ['all',  `All ${displayedCount}`, 'var(--accent)',  'var(--accent-dim)'],
+          ['bull', `🟢 ${bullCount}`,        'var(--green)',   'var(--green-dim)'],
+          ['bear', `🔴 ${bearCount}`,        'var(--red)',     'var(--red-dim)'],
+        ].map(([id,label,col,bg])=>(
           <button key={id} onClick={()=>setResultFilter(id)} style={{
-            padding:'5px 10px', borderRadius:20, cursor:'pointer', flexShrink:0,
-            border:`1.5px solid ${resultFilter===id ? 'var(--accent)' : 'var(--border)'}`,
-            background: resultFilter===id ? 'var(--accent-dim)' : 'var(--bg2)',
-            color: resultFilter===id ? 'var(--accent)' : 'var(--text3)',
+            padding:'5px 10px', borderRadius:20, cursor:'pointer', flexShrink:0, whiteSpace:'nowrap',
+            border:`1.5px solid ${resultFilter===id ? col : 'var(--border)'}`,
+            background: resultFilter===id ? bg : 'var(--bg2)',
+            color: resultFilter===id ? col : 'var(--text3)',
             fontFamily:'var(--mono)', fontWeight: resultFilter===id ? 700 : 400,
             fontSize:11, transition:'all .15s',
-          }}>{icon}</button>
+          }}>{label}</button>
         ))}
 
         <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
@@ -836,7 +840,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
 
         <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
 
-        {/* Result counts */}
+        {/* Sort buttons */}
         {scanning&&(
           <span style={{ display:'flex',alignItems:'center',gap:3,fontFamily:'var(--mono)',fontSize:10,
             color:'var(--amber)',background:'rgba(255,167,38,.1)',border:'1px solid var(--amber)',
@@ -844,17 +848,21 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
             <span style={{ display:'inline-block',animation:'spin 1s linear infinite' }}>⟳</span>{progress}%
           </span>
         )}
-        <span style={{ fontFamily:'var(--mono)',fontSize:12,fontWeight:700,color:'var(--text)',flexShrink:0 }}>{displayedCount}</span>
-        <span style={{ fontFamily:'var(--mono)',fontSize:11,color:'var(--text3)',flexShrink:0 }}>hits</span>
-        <span style={{ padding:'2px 7px',borderRadius:8,fontSize:11,fontWeight:700,
-          background:'var(--green-dim)',color:'var(--green)',border:'1px solid var(--green2)',
-          fontFamily:'var(--mono)',flexShrink:0 }}>🟢{bullCount}</span>
-        <span style={{ padding:'2px 7px',borderRadius:8,fontSize:11,fontWeight:700,
-          background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red2)',
-          fontFamily:'var(--mono)',flexShrink:0 }}>🔴{bearCount}</span>
+        {[['time','Time'],['symbol','Sym'],['gain','Gain'],['volume','Vol']].map(([col,lbl])=>(
+          <button key={col} onClick={()=>toggleSort(col)} style={{
+            padding:'5px 9px', borderRadius:20, cursor:'pointer', flexShrink:0, whiteSpace:'nowrap',
+            border:`1.5px solid ${sortBy===col ? tabColor : 'var(--border)'}`,
+            background: sortBy===col ? `${tabColor}18` : 'var(--bg2)',
+            color: sortBy===col ? tabColor : 'var(--text3)',
+            fontSize:11, fontFamily:'var(--mono)', fontWeight: sortBy===col ? 700 : 400,
+            transition:'all .15s',
+          }}>{lbl}{sortBy===col?(sortDir==='desc'?' ↓':' ↑'):''}</button>
+        ))}
 
-        {/* View toggle — pushed to end */}
-        <div style={{ display:'flex',gap:3,marginLeft:'auto',flexShrink:0 }}>
+        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
+
+        {/* View toggle */}
+        <div style={{ display:'flex',gap:3,flexShrink:0 }}>
           {['list','cards'].map(v=>(
             <button key={v} className={`btn-small ${viewMode===v?'active':''}`} onClick={()=>setViewMode(v)}
               style={viewMode===v?{borderColor:tabColor,color:tabColor,background:`${tabColor}15`}:{}}>
