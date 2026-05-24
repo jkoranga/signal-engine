@@ -800,7 +800,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         ))}
       </div>
 
-      {/* ── Row 2: All | 🟢 | 🔴 | divider | All Vol | >500K | >1M | >5M | >10M ── */}
+      {/* ── Row 2: filter + vol + result counts + view toggle — all in one ── */}
       <div style={{
         display:'flex', gap:4, alignItems:'center', flexWrap:'nowrap',
         overflowX:'auto', WebkitOverflowScrolling:'touch',
@@ -811,7 +811,7 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
         {/* All / 🟢 / 🔴 result filter */}
         {[['all','All'],['bull','🟢'],['bear','🔴']].map(([id,icon])=>(
           <button key={id} onClick={()=>setResultFilter(id)} style={{
-            padding:'5px 10px', borderRadius:20, cursor:'pointer', fontSize:13, flexShrink:0,
+            padding:'5px 10px', borderRadius:20, cursor:'pointer', flexShrink:0,
             border:`1.5px solid ${resultFilter===id ? 'var(--accent)' : 'var(--border)'}`,
             background: resultFilter===id ? 'var(--accent-dim)' : 'var(--bg2)',
             color: resultFilter===id ? 'var(--accent)' : 'var(--text3)',
@@ -833,6 +833,35 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
             transition:'all .15s',
           }}>{f.label}</button>
         ))}
+
+        <div style={{width:1,height:18,background:'var(--border)',flexShrink:0,margin:'0 1px'}}/>
+
+        {/* Result counts */}
+        {scanning&&(
+          <span style={{ display:'flex',alignItems:'center',gap:3,fontFamily:'var(--mono)',fontSize:10,
+            color:'var(--amber)',background:'rgba(255,167,38,.1)',border:'1px solid var(--amber)',
+            borderRadius:8,padding:'3px 8px',flexShrink:0 }}>
+            <span style={{ display:'inline-block',animation:'spin 1s linear infinite' }}>⟳</span>{progress}%
+          </span>
+        )}
+        <span style={{ fontFamily:'var(--mono)',fontSize:12,fontWeight:700,color:'var(--text)',flexShrink:0 }}>{displayedCount}</span>
+        <span style={{ fontFamily:'var(--mono)',fontSize:11,color:'var(--text3)',flexShrink:0 }}>hits</span>
+        <span style={{ padding:'2px 7px',borderRadius:8,fontSize:11,fontWeight:700,
+          background:'var(--green-dim)',color:'var(--green)',border:'1px solid var(--green2)',
+          fontFamily:'var(--mono)',flexShrink:0 }}>🟢{bullCount}</span>
+        <span style={{ padding:'2px 7px',borderRadius:8,fontSize:11,fontWeight:700,
+          background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red2)',
+          fontFamily:'var(--mono)',flexShrink:0 }}>🔴{bearCount}</span>
+
+        {/* View toggle — pushed to end */}
+        <div style={{ display:'flex',gap:3,marginLeft:'auto',flexShrink:0 }}>
+          {['list','cards'].map(v=>(
+            <button key={v} className={`btn-small ${viewMode===v?'active':''}`} onClick={()=>setViewMode(v)}
+              style={viewMode===v?{borderColor:tabColor,color:tabColor,background:`${tabColor}15`}:{}}>
+              {v==='list'?'≡':'⊞'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Single sym input ── */}
@@ -859,39 +888,6 @@ export default function TFScannerTab({ timeframe, tabColor, settings, update, sa
 
       {/* ── Results ── */}
       <div>
-        {/* Results header — full width, no box */}
-        <div style={{
-          display:'flex', alignItems:'center', gap:5, flexWrap:'nowrap',
-          overflowX:'auto', WebkitOverflowScrolling:'touch',
-          scrollbarWidth:'none', msOverflowStyle:'none',
-          marginLeft:-12, marginRight:-12, paddingLeft:12, paddingRight:12,
-          paddingBottom:4, marginBottom:8,
-        }}>
-          {scanning&&(
-            <span style={{ display:'flex',alignItems:'center',gap:4,fontFamily:'var(--mono)',fontSize:11,
-              color:'var(--amber)',background:'rgba(255,167,38,.1)',border:'1px solid var(--amber)',
-              borderRadius:8,padding:'3px 10px',flexShrink:0 }}>
-              <span style={{ display:'inline-block',animation:'spin 1s linear infinite' }}>⟳</span> LIVE {progress}%
-            </span>
-          )}
-          <span style={{ fontFamily:'var(--mono)',fontSize:17,fontWeight:800,color:'var(--text)',flexShrink:0 }}>{displayedCount}</span>
-          <span style={{ fontFamily:'var(--mono)',fontSize:13,color:'var(--text3)',flexShrink:0 }}>results</span>
-          <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
-            background:'var(--green-dim)',color:'var(--green)',border:'1px solid var(--green2)',
-            fontFamily:'var(--mono)',flexShrink:0 }}>🟢 {bullCount}</span>
-          <span style={{ padding:'3px 9px',borderRadius:8,fontSize:12,fontWeight:700,
-            background:'var(--red-dim)',color:'var(--red)',border:'1px solid var(--red2)',
-            fontFamily:'var(--mono)',flexShrink:0 }}>🔴 {bearCount}</span>
-          <div style={{ display:'flex',gap:3,marginLeft:'auto',flexShrink:0 }}>
-            {['list','cards'].map(v=>(
-              <button key={v} className={`btn-small ${viewMode===v?'active':''}`} onClick={()=>setViewMode(v)}
-                style={viewMode===v?{borderColor:tabColor,color:tabColor,background:`${tabColor}15`}:{}}>
-                {v==='list'?'≡':'⊞'}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {displayedCount===0 ? (
           <div className="empty-state">
             <div className="empty-icon" style={{ color:tabColor }}>{scanMode==='single'?'⚡':scanning?'🔍':loopMode?'🔁':enabled?'⏳':'💤'}</div>
