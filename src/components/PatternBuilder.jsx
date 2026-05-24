@@ -1495,18 +1495,46 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
 
     <div style={{
       borderRadius: 13,
-      border: `1.5px solid ${pattern.locked ? 'rgba(255,200,0,0.5)' : pattern.enabled ? color + '55' : 'var(--border)'}`,
-      background: pattern.locked ? 'rgba(255,200,0,0.04)' : 'var(--bg1)', overflow: 'hidden',
-      boxShadow: pattern.locked ? '0 0 14px rgba(255,200,0,0.12)' : 'none',
+      border: `2px solid ${
+        pattern.locked
+          ? 'rgba(255,200,0,0.7)'
+          : pattern.enabled
+            ? pattern.side === 'bull' ? 'rgba(0,230,118,0.55)' : 'rgba(255,60,80,0.55)'
+            : 'rgba(255,255,255,0.1)'
+      }`,
+      background: pattern.locked
+        ? 'rgba(255,200,0,0.04)'
+        : pattern.enabled
+          ? pattern.side === 'bull' ? 'rgba(0,230,118,0.03)' : 'rgba(255,60,80,0.03)'
+          : 'var(--bg1)',
+      overflow: 'hidden',
+      boxShadow: pattern.locked
+        ? '0 0 14px rgba(255,200,0,0.15)'
+        : pattern.enabled
+          ? pattern.side === 'bull'
+            ? '0 2px 12px rgba(0,230,118,0.08)'
+            : '0 2px 12px rgba(255,60,80,0.08)'
+          : 'none',
       opacity: mirrorPopup || copyPopup || lockPopup ? 0.3 : 1,
       transition: 'opacity .15s, border .2s, box-shadow .2s',
       pointerEvents: mirrorPopup || copyPopup || lockPopup ? 'none' : 'auto',
+      position: 'relative',
     }}>
+      {/* Left accent bar */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: pattern.locked
+          ? 'rgba(255,200,0,0.8)'
+          : pattern.enabled
+            ? pattern.side === 'bull' ? 'var(--green)' : 'var(--red)'
+            : 'rgba(255,255,255,0.15)',
+        borderRadius: '13px 0 0 13px',
+      }} />
       {/* Header — icon + name + subtitle + lock + toggle only */}
       <div
         onClick={() => pattern.locked ? setLockPopup(true) : setOpen(o => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 9, padding: '12px 13px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 9, padding: '12px 13px 12px 17px', cursor: 'pointer',
           background: pattern.enabled
             ? pattern.side === 'bull' ? 'rgba(0,230,118,0.07)' : 'rgba(255,60,80,0.07)'
             : 'transparent',
@@ -1517,8 +1545,9 @@ function PatternEditor({ pattern, onChange, onDelete, onMirrorPattern, onCopyPat
         {/* Name + subtitle — takes all available space */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontWeight: 800, fontSize: 15, color: pattern.enabled ? color : 'var(--text2)',
+            fontWeight: 900, fontSize: 15, color: pattern.enabled ? color : 'rgba(255,255,255,0.4)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            letterSpacing: '-0.01em',
           }}>{pattern.name}</div>
           <div style={{
             fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 3,
@@ -2480,7 +2509,7 @@ export default function PatternBuilderTab({ settings, update }) {
                 {/* ── Left gutter — hidden when pattern is open for full-width edit ── */}
                 {!isOpen && (
                 <div style={{
-                  flexShrink: 0, width: 28,
+                  flexShrink: 0, width: 32,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                   gap: 4, paddingRight: 4,
                 }}>
